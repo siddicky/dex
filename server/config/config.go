@@ -80,6 +80,8 @@ const (
 	DefaultMinimumStepHeartbeatTimeout = 10 * time.Second
 	// DefaultStreamMaxMessageBytes limits each serialized Stream Value to 100 KiB.
 	DefaultStreamMaxMessageBytes int64 = 100 * 1024
+	// DefaultStreamMaxListMessagesPageSize caps one reverse Stream page at 1000 messages.
+	DefaultStreamMaxListMessagesPageSize int32 = 1000
 	// DefaultStreamEstimatedMessageOverheadBytes approximates backend bookkeeping per message.
 	DefaultStreamEstimatedMessageOverheadBytes int64 = 512
 	// DefaultStreamTrimTriggerPercent starts asynchronous trimming at ninety percent of capacity.
@@ -173,6 +175,8 @@ type (
 		RedisURL string `yaml:"redisURL"`
 		// MaxMessageBytes limits each serialized Stream Value. Default 102400. Must be positive after defaults.
 		MaxMessageBytes int64 `yaml:"maxMessageBytes"`
+		// MaxReadMessages caps one ListStreamMessages page. Default 1000. Must be positive after defaults. Immutable after startup.
+		MaxReadMessages int32 `yaml:"maxReadMessages"`
 		// EstimatedMessageOverheadBytes is charged per message beyond payload and identity bytes. Default 512. Must be non-negative.
 		EstimatedMessageOverheadBytes int64 `yaml:"estimatedMessageOverheadBytes"`
 		// TrimTriggerPercent starts asynchronous trimming at this capacity percentage. Default 90. Valid range is 1 through 99.
@@ -532,6 +536,14 @@ func (c StreamStoreConfig) EffectiveMaxMessageBytes() int64 {
 	return c.MaxMessageBytes
 }
 
+// EffectiveMaxListMessagesPageSize returns the configured page limit or 1000-message default.
+func (c StreamStoreConfig) EffectiveMaxListMessagesPageSize() int32 {
+	if c.MaxReadMessages == 0 {
+		return DefaultStreamMaxListMessagesPageSize
+	}
+	return c.MaxReadMessages
+}
+
 // EffectiveEstimatedMessageOverheadBytes returns the configured charge or 512-byte default.
 func (c StreamStoreConfig) EffectiveEstimatedMessageOverheadBytes() int64 {
 	if c.EstimatedMessageOverheadBytes == 0 {
@@ -616,6 +628,9 @@ func (c StreamStoreConfig) Validate() error {
 	}
 	if c.EffectiveMaxMessageBytes() <= 0 {
 		return fmt.Errorf("stream store maxMessageBytes must be positive")
+	}
+	if c.EffectiveMaxListMessagesPageSize() <= 0 {
+		return fmt.Errorf("stream store maxReadMessages must be positive")
 	}
 	if c.EstimatedMessageOverheadBytes < 0 {
 		return fmt.Errorf("stream store estimatedMessageOverheadBytes must be non-negative")
