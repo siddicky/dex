@@ -28,20 +28,27 @@ import {
   type Context,
   type Flow,
   type PersistenceSchema,
+  type RPCResult,
   type Step,
   type StepDecision,
   type StepOptions,
 } from "@superdurable/dex";
 
-const approval = new Channel("Approval", stringCodec);
-export const queued = new Channel("Queued", stringCodec);
-export const moved = new Channel("Moved", stringCodec);
+const approvalMessages = new Channel("ApprovalMessages", stringCodec);
+export const queuedMessages = new Channel("QueuedMessages", stringCodec);
+export const prioritizedMessages = new Channel("PrioritizedMessages", stringCodec);
 
-export interface MoveMessage {
+export interface QueuedMessageReference {
   readonly messageId: string;
 }
 
-const moveMessageCodec = jsonCodec<MoveMessage>();
+export interface PendingMessage {
+  readonly messageId: string;
+  readonly value: string;
+}
+
+const queuedMessageReferenceCodec = jsonCodec<QueuedMessageReference>();
+const pendingMessagesCodec = jsonCodec<readonly PendingMessage[]>();
 
 class ChannelWait implements Step<number> {
   public readonly inputCodec = doubleCodec;
@@ -51,27 +58,27 @@ class ChannelWait implements Step<number> {
   }
 
   public getStepOptions(): StepOptions {
-    return { executeLoadChannels: [queued] };
+    return { executeLoadChannels: [queuedMessages] };
   }
 
   public waitFor(_context: Context, input: number): Wait {
     return Wait.anyOf(
-      approval.forOne(),
+      approvalMessages.forOne(),
       Timer.byDuration(input * 1000),
     );
   }
 
   public execute(context: Context, _input: number): StepDecision {
-    const pending = queued.pendingMessages(context);
-    if (pending.length > 0) {
-      queued.delete(context, pending[0]!.messageId);
-      return gracefulComplete(pending[0]!.value);
+    const pendingQueuedMessages = queuedMessages.pendingMessages(context);
+    if (pendingQueuedMessages.length > 0) {
+      queuedMessages.delete(context, pendingQueuedMessages[0]!.messageId);
+      return gracefulComplete(pendingQueuedMessages[0]!.value);
     }
     if (context.hasTimerFired()) {
       return gracefulComplete("approval timed out");
     }
-    const approvals = approval.results(context);
-    return gracefulComplete(approvals[0]!);
+    const approvalMessageValues = approvalMessages.results(context);
+    return gracefulComplete(approvalMessageValues[0]!);
   }
 }
 
@@ -87,20 +94,54 @@ export class ChannelFlow implements Flow<number> {
   }
 
   public getPersistenceSchema(): PersistenceSchema {
-    return { channels: [approval, queued, moved] };
+    return { channels: [approvalMessages, queuedMessages, prioritizedMessages] };
   }
 
   @rpc()
-  public approve(context: Context): void {
-    approval.publish(context, "approved");
+  public publishApprovalMessage(context: Context): void {
+    approvalMessages.publish(context, "approved");
   }
 
-  @rpc({ isTransactional: true, loadChannels: [queued], inputCodec: moveMessageCodec })
-  public move(context: Context, message: MoveMessage): void {
-    const messageToMove = queued.findPendingMessage(context, message.messageId);
-    queued.delete(context, message.messageId);
-    if (messageToMove !== undefined) {
-      moved.publish(context, messageToMove.value);
+  @rpc({ inputCodec: stringCodec })
+  public enqueueChannelMessage(context: Context, value: string): void {
+    queuedMessages.publish(context, value);
+  }
+
+  @rpc({ loadChannels: [queuedMessages], outputCodec: pendingMessagesCodec })
+  public getQueuedMessages(context: Context): RPCResult<readonly PendingMessage[]> {
+    return { output: queuedMessages.pendingMessages(context) };
+  }
+
+  @rpc({
+    isTransactional: true,
+    loadChannels: [queuedMessages],
+    inputCodec: queuedMessageReferenceCodec,
+  })
+  public deleteQueuedMessage(context: Context, queuedMessage: QueuedMessageReference): void {
+    queuedMessages.delete(context, queuedMessage.messageId);
+  }
+
+  @rpc({ loadChannels: [prioritizedMessages], outputCodec: pendingMessagesCodec })
+  public getPrioritizedMessages(context: Context): RPCResult<readonly PendingMessage[]> {
+    return { output: prioritizedMessages.pendingMessages(context) };
+  }
+
+  @rpc({
+    isTransactional: true,
+    loadChannels: [queuedMessages],
+    inputCodec: queuedMessageReferenceCodec,
+  })
+  public moveQueuedMessageToPrioritizedMessages(
+    context: Context,
+    queuedMessage: QueuedMessageReference,
+  ): void {
+    const messageToPrioritize = queuedMessages.findPendingMessage(
+      context,
+      queuedMessage.messageId,
+    );
+    queuedMessages.delete(context, queuedMessage.messageId);
+    if (messageToPrioritize !== undefined) {
+      prioritizedMessages.publish(context, messageToPrioritize.value);
     }
   }
 }

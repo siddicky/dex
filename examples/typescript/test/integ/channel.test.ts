@@ -19,7 +19,6 @@ import test from "node:test";
 
 import { ChannelMessageNotFoundError } from "@superdurable/dex";
 
-import { moved, queued } from "../../src/primitives/channel/channel-flow.js";
 import {
   acquireIntegEnvironment,
   releaseIntegEnvironment,
@@ -42,28 +41,61 @@ test("channel message can be moved by ID", async () => {
     30,
     environment.startOptions(),
   );
-  await environment.client.publish(flowId, queued, "delete me");
-  await environment.client.publish(flowId, queued, "move me");
+  await environment.client.invokeRPC(
+    environment.channelFlow.enqueueChannelMessage,
+    flowId,
+    "delete me",
+  );
+  await environment.client.invokeRPC(
+    environment.channelFlow.enqueueChannelMessage,
+    flowId,
+    "move me",
+  );
 
-  const pending = await environment.client.getChannelMessages(flowId, queued);
+  const pending = await environment.client.invokeRPC(
+    environment.channelFlow.getQueuedMessages,
+    flowId,
+  );
   assert.deepEqual(pending.map((message) => message.value), ["delete me", "move me"]);
-  await environment.client.deleteChannelMessage(flowId, queued, pending[0]!.messageId);
+  await environment.client.invokeRPC(
+    environment.channelFlow.deleteQueuedMessage,
+    flowId,
+    { messageId: pending[0]!.messageId },
+  );
 
-  const move = { messageId: pending[1]!.messageId };
-  await environment.client.invokeRPC(environment.channelFlow.move, flowId, move);
+  const queuedMessage = { messageId: pending[1]!.messageId };
+  await environment.client.invokeRPC(
+    environment.channelFlow.moveQueuedMessageToPrioritizedMessages,
+    flowId,
+    queuedMessage,
+  );
   assert.deepEqual(
-    (await environment.client.getChannelMessages(flowId, moved)).map((message) => message.value),
+    (await environment.client.invokeRPC(
+      environment.channelFlow.getPrioritizedMessages,
+      flowId,
+    )).map(
+      (message) => message.value,
+    ),
     ["move me"],
   );
 
   await assert.rejects(
-    environment.client.invokeRPC(environment.channelFlow.move, flowId, move),
+    environment.client.invokeRPC(
+      environment.channelFlow.moveQueuedMessageToPrioritizedMessages,
+      flowId,
+      queuedMessage,
+    ),
     ChannelMessageNotFoundError,
   );
   assert.deepEqual(
-    (await environment.client.getChannelMessages(flowId, moved)).map((message) => message.value),
+    (await environment.client.invokeRPC(
+      environment.channelFlow.getPrioritizedMessages,
+      flowId,
+    )).map(
+      (message) => message.value,
+    ),
     ["move me"],
   );
 
-  await environment.client.invokeRPC(environment.channelFlow.approve, flowId);
+  await environment.client.invokeRPC(environment.channelFlow.publishApprovalMessage, flowId);
 });

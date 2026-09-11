@@ -80,13 +80,12 @@ func (controller *controller) approve(request *gin.Context) {
 	if !found {
 		return
 	}
-	var none sdk.None
 	err := controller.client.InvokeRPC(
 		request.Request.Context(),
 		flowID,
-		controller.flow.Approve,
+		controller.flow.PublishApprovalMessage,
 		nil,
-		&none,
+		nil,
 		sdk.InvokeOptions{},
 	)
 	httputil.RespondString(request, "done", err)
@@ -101,11 +100,13 @@ func (controller *controller) enqueue(request *gin.Context) {
 	if !found {
 		return
 	}
-	err := controller.client.PublishToChannel(
+	err := controller.client.InvokeRPC(
 		request.Request.Context(),
 		flowID,
-		Queued,
+		controller.flow.EnqueueChannelMessage,
 		value,
+		nil,
+		sdk.InvokeOptions{},
 	)
 	httputil.RespondString(request, "done", err)
 }
@@ -116,11 +117,13 @@ func (controller *controller) messages(request *gin.Context) {
 		return
 	}
 	var messages []sdk.ChannelMessage[string]
-	err := controller.client.GetChannelMessages(
+	err := controller.client.InvokeRPC(
 		request.Request.Context(),
 		flowID,
-		Queued,
+		controller.flow.GetQueuedMessages,
+		nil,
 		&messages,
+		sdk.InvokeOptions{LoadChannels: []sdk.ChannelDef{QueuedMessages}},
 	)
 	httputil.Respond(request, messages, err)
 }
@@ -134,11 +137,16 @@ func (controller *controller) delete(request *gin.Context) {
 	if !found {
 		return
 	}
-	err := controller.client.DeleteChannelMessage(
+	err := controller.client.InvokeRPC(
 		request.Request.Context(),
 		flowID,
-		Queued,
-		messageID,
+		controller.flow.DeleteQueuedMessage,
+		QueuedMessageReference{MessageID: messageID},
+		nil,
+		sdk.InvokeOptions{
+			IsTransactional: true,
+			LoadChannels:    []sdk.ChannelDef{QueuedMessages},
+		},
 	)
 	httputil.RespondString(request, "done", err)
 }
@@ -152,16 +160,15 @@ func (controller *controller) move(request *gin.Context) {
 	if !found {
 		return
 	}
-	var none sdk.None
 	err := controller.client.InvokeRPC(
 		request.Request.Context(),
 		flowID,
-		controller.flow.Move,
-		MoveMessage{MessageID: messageID},
-		&none,
+		controller.flow.MoveQueuedMessageToPrioritizedMessages,
+		QueuedMessageReference{MessageID: messageID},
+		nil,
 		sdk.InvokeOptions{
 			IsTransactional: true,
-			LoadChannels:    []sdk.ChannelDef{Queued},
+			LoadChannels:    []sdk.ChannelDef{QueuedMessages},
 		},
 	)
 	httputil.RespondString(request, "done", err)

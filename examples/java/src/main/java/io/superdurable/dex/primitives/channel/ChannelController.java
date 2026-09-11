@@ -17,7 +17,6 @@
 package io.superdurable.dex.primitives.channel;
 
 import io.superdurable.dex.Client;
-import io.superdurable.dex.ChannelMessage;
 import io.superdurable.dex.shared.ExampleFlows;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -55,7 +54,7 @@ public final class ChannelController {
     @GetMapping("/approve")
     public ResponseEntity<String> approve(@RequestParam final String workflowId) {
         final ChannelFlow stub = client.newRpcStub(ChannelFlow.class, workflowId);
-        client.invokeRPC(stub::approve);
+        client.invokeRPC(stub::publishApprovalMessage);
         return ResponseEntity.ok("done");
     }
 
@@ -63,21 +62,26 @@ public final class ChannelController {
     public ResponseEntity<String> enqueue(
             @RequestParam final String workflowId,
             @RequestParam final String value) {
-        client.publish(workflowId, flow.queued, value);
+        final ChannelFlow stub = client.newRpcStub(ChannelFlow.class, workflowId);
+        client.invokeRPC(stub::enqueueChannelMessage, value);
         return ResponseEntity.ok("done");
     }
 
     @GetMapping("/messages")
-    public ResponseEntity<List<ChannelMessage<String>>> messages(
+    public ResponseEntity<List<ChannelFlow.PendingMessage>> messages(
             @RequestParam final String workflowId) {
-        return ResponseEntity.ok(client.getChannelMessages(workflowId, flow.queued));
+        final ChannelFlow stub = client.newRpcStub(ChannelFlow.class, workflowId);
+        return ResponseEntity.ok(client.invokeRPC(stub::getQueuedMessages).messages);
     }
 
     @GetMapping("/delete")
     public ResponseEntity<String> delete(
             @RequestParam final String workflowId,
             @RequestParam final String messageId) {
-        client.deleteChannelMessage(workflowId, flow.queued, messageId);
+        final ChannelFlow stub = client.newRpcStub(ChannelFlow.class, workflowId);
+        client.invokeRPC(
+                stub::deleteQueuedMessage,
+                new ChannelFlow.QueuedMessageReference(messageId));
         return ResponseEntity.ok("done");
     }
 
@@ -86,7 +90,9 @@ public final class ChannelController {
             @RequestParam final String workflowId,
             @RequestParam final String messageId) {
         final ChannelFlow stub = client.newRpcStub(ChannelFlow.class, workflowId);
-        client.invokeRPC(stub::move, new ChannelFlow.MoveMessage(messageId));
+        client.invokeRPC(
+                stub::moveQueuedMessageToPrioritizedMessages,
+                new ChannelFlow.QueuedMessageReference(messageId));
         return ResponseEntity.ok("done");
     }
 }

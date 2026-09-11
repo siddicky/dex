@@ -217,7 +217,7 @@ def create_ai_agent_blueprint(app_state: ExampleApp) -> Blueprint:
         flow_id = required_query("workflowId")
         try:
             agent_snapshot = await app_state.client.invoke_rpc(
-                app_state.ai_agent.snapshot,
+                app_state.ai_agent.get_snapshot,
                 flow_id,
             )
         except FlowNotActiveError:
@@ -247,9 +247,9 @@ def create_ai_agent_blueprint(app_state: ExampleApp) -> Blueprint:
     async def delete_queued_message() -> Response:
         payload = await _json_object()
         try:
-            await app_state.client.delete_channel_message(
+            await app_state.client.invoke_rpc(
+                app_state.ai_agent.delete_queued_message,
                 _required_string(payload, "workflowId"),
-                app_state.ai_agent.queued_user_messages,
                 _required_string(payload, "messageId"),
             )
         except ChannelMessageNotFoundError as error:

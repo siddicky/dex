@@ -41,50 +41,81 @@ func TestChannelMessageCanBeMovedByID(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	require.NoError(t, integClient.PublishToChannel(ctx, flowID, channelprimitive.Queued, "delete me"))
-	require.NoError(t, integClient.PublishToChannel(ctx, flowID, channelprimitive.Queued, "move me"))
+	require.NoError(t, integClient.InvokeRPC(
+		ctx, flowID, registry.Channel.EnqueueChannelMessage, "delete me", nil, dex.InvokeOptions{},
+	))
+	require.NoError(t, integClient.InvokeRPC(
+		ctx, flowID, registry.Channel.EnqueueChannelMessage, "move me", nil, dex.InvokeOptions{},
+	))
 
 	var pending []dex.ChannelMessage[string]
-	require.NoError(t, integClient.GetChannelMessages(ctx, flowID, channelprimitive.Queued, &pending))
-	require.Len(t, pending, 2)
-	require.Equal(t, []string{"delete me", "move me"}, []string{pending[0].Value, pending[1].Value})
-	require.NoError(t, integClient.DeleteChannelMessage(ctx, flowID, channelprimitive.Queued, pending[0].MessageID))
-
-	move := channelprimitive.MoveMessage{MessageID: pending[1].MessageID}
-	var none dex.None
 	require.NoError(t, integClient.InvokeRPC(
 		ctx,
 		flowID,
-		registry.Channel.Move,
-		move,
-		&none,
-		dex.InvokeOptions{IsTransactional: true, LoadChannels: []dex.ChannelDef{channelprimitive.Queued}},
+		registry.Channel.GetQueuedMessages,
+		nil,
+		&pending,
+		dex.InvokeOptions{LoadChannels: []dex.ChannelDef{channelprimitive.QueuedMessages}},
+	))
+	require.Len(t, pending, 2)
+	require.Equal(t, []string{"delete me", "move me"}, []string{pending[0].Value, pending[1].Value})
+	require.NoError(t, integClient.InvokeRPC(
+		ctx,
+		flowID,
+		registry.Channel.DeleteQueuedMessage,
+		channelprimitive.QueuedMessageReference{MessageID: pending[0].MessageID},
+		nil,
+		dex.InvokeOptions{IsTransactional: true, LoadChannels: []dex.ChannelDef{channelprimitive.QueuedMessages}},
 	))
 
-	var moved []dex.ChannelMessage[string]
-	require.NoError(t, integClient.GetChannelMessages(ctx, flowID, channelprimitive.Moved, &moved))
-	require.Len(t, moved, 1)
-	require.Equal(t, []string{"move me"}, []string{moved[0].Value})
+	queuedMessage := channelprimitive.QueuedMessageReference{MessageID: pending[1].MessageID}
+	require.NoError(t, integClient.InvokeRPC(
+		ctx,
+		flowID,
+		registry.Channel.MoveQueuedMessageToPrioritizedMessages,
+		queuedMessage,
+		nil,
+		dex.InvokeOptions{IsTransactional: true, LoadChannels: []dex.ChannelDef{channelprimitive.QueuedMessages}},
+	))
+
+	var prioritizedMessages []dex.ChannelMessage[string]
+	require.NoError(t, integClient.InvokeRPC(
+		ctx,
+		flowID,
+		registry.Channel.GetPrioritizedMessages,
+		nil,
+		&prioritizedMessages,
+		dex.InvokeOptions{LoadChannels: []dex.ChannelDef{channelprimitive.PrioritizedMessages}},
+	))
+	require.Len(t, prioritizedMessages, 1)
+	require.Equal(t, []string{"move me"}, []string{prioritizedMessages[0].Value})
 
 	err = integClient.InvokeRPC(
 		ctx,
 		flowID,
-		registry.Channel.Move,
-		move,
-		&none,
-		dex.InvokeOptions{IsTransactional: true, LoadChannels: []dex.ChannelDef{channelprimitive.Queued}},
+		registry.Channel.MoveQueuedMessageToPrioritizedMessages,
+		queuedMessage,
+		nil,
+		dex.InvokeOptions{IsTransactional: true, LoadChannels: []dex.ChannelDef{channelprimitive.QueuedMessages}},
 	)
 	var notFound *dex.ChannelMessageNotFoundError
 	require.ErrorAs(t, err, &notFound)
-	require.NoError(t, integClient.GetChannelMessages(ctx, flowID, channelprimitive.Moved, &moved))
-	require.Equal(t, []string{"move me"}, []string{moved[0].Value})
+	require.NoError(t, integClient.InvokeRPC(
+		ctx,
+		flowID,
+		registry.Channel.GetPrioritizedMessages,
+		nil,
+		&prioritizedMessages,
+		dex.InvokeOptions{LoadChannels: []dex.ChannelDef{channelprimitive.PrioritizedMessages}},
+	))
+	require.Equal(t, []string{"move me"}, []string{prioritizedMessages[0].Value})
 
 	require.NoError(t, integClient.InvokeRPC(
 		ctx,
 		flowID,
-		registry.Channel.Approve,
+		registry.Channel.PublishApprovalMessage,
 		nil,
-		&none,
+		nil,
 		dex.InvokeOptions{},
 	))
 }

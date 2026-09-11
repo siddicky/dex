@@ -21,33 +21,37 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use dex_examples_rust::create_example_registry;
 use dex_examples_rust::patterns::recovery::FailureRecoveryFlow;
 use dex_examples_rust::primitives::channel::flow::{
-    CHANNEL_APPROVE, CHANNEL_MOVE, ChannelFlow, MOVED, MoveMessage, QUEUED,
+    ChannelFlow, DELETE_QUEUED_MESSAGE, ENQUEUE_CHANNEL_MESSAGE, GET_PRIORITIZED_MESSAGES,
+    GET_QUEUED_MESSAGES, MOVE_QUEUED_MESSAGE_TO_PRIORITIZED_MESSAGES, PUBLISH_APPROVAL_MESSAGE,
+    QueuedMessageReference,
 };
 use dex_examples_rust::primitives::stream::flow::{PROGRESS, StreamFlow};
 use dex_examples_rust::products::deal_dsl::{
-    DEAL_CONDITION_MESSAGES, DEAL_CURRENT_STATE, DealDSLFlow, example_deal_start,
+    ConditionMessage, DEAL_CURRENT_STATE, DealDSLFlow, SEND_DEAL_CONDITION_MESSAGE,
+    example_deal_start,
 };
 use dex_examples_rust::products::engagement::{
-    ENGAGEMENT_ACCEPT, ENGAGEMENT_DESCRIBE, EngagementFlow, EngagementRequest, EngagementStatus,
+    ACCEPT_ENGAGEMENT, DESCRIBE_ENGAGEMENT, EngagementFlow, EngagementRequest, EngagementStatus,
 };
 use dex_examples_rust::products::job_post::{
-    Init, JOB_POST_READ, JOB_POST_UPDATE, JobPost, JobPostingFlow, UpdateIndeedPosting,
+    GET_JOB_POST, Init, JobPost, JobPostingFlow, UPDATE_JOB_POST, UpdateIndeedPosting,
     UpdateLinkedInPosting,
 };
 use dex_examples_rust::products::microservices::{
-    DATA, ORCHESTRATION_READY, ORCHESTRATION_SWAP, OrchestrationFlow,
+    DATA, OrchestrationFlow, SIGNAL_ORCHESTRATION_READY, SWAP_ORCHESTRATION_DATA,
 };
 use dex_examples_rust::products::money_transfer::{MoneyTransferFlow, TransferRequest};
 use dex_examples_rust::products::order_processing::{
-    Charge, ORDER_APPROVE, OrderProcessingFlow, OrderRequest, Ship,
+    APPROVE_ORDER, Charge, OrderProcessingFlow, OrderRequest, Ship,
 };
 use dex_examples_rust::products::signup::{
-    ONBOARDING_STATUS, ONBOARDING_TASK_1, ONBOARDING_TASK_2, ONBOARDING_VERIFY, UserOnboardingFlow,
-    WAITING_FOR_TASK_1, WAITING_FOR_TASK_2, WAITING_FOR_VERIFICATION,
+    ACCOMPLISH_ONBOARDING_TASK_1, ACCOMPLISH_ONBOARDING_TASK_2, ONBOARDING_STATUS,
+    UserOnboardingFlow, VERIFY_ONBOARDING, WAITING_FOR_TASK_1, WAITING_FOR_TASK_2,
+    WAITING_FOR_VERIFICATION,
 };
 use dex_examples_rust::products::subscription::{
-    SUBSCRIPTION_CANCEL, SUBSCRIPTION_DESCRIBE, SUBSCRIPTION_UPDATE_CHARGE, SubscriptionFlow,
-    SubscriptionRequest, SubscriptionState,
+    CANCEL_SUBSCRIPTION, DESCRIBE_SUBSCRIPTION, SubscriptionFlow, SubscriptionRequest,
+    SubscriptionState, UPDATE_SUBSCRIPTION_CHARGE,
 };
 use dex_sdk::{
     AttributeMatch, BlobCache, BlobCacheConfig, Client, ClientOptions, FlowStatus, SdkError,
@@ -117,7 +121,7 @@ impl DexEnvironment {
         while Instant::now() < deadline {
             let status = self
                 .client
-                .invoke_rpc_without_input(flow_id, ENGAGEMENT_DESCRIBE)
+                .invoke_rpc_without_input(flow_id, DESCRIBE_ENGAGEMENT)
                 .expect("describe Rust Engagement Flow");
             if status.status == expected {
                 return status;
@@ -132,7 +136,7 @@ impl DexEnvironment {
         while Instant::now() < deadline {
             let state = self
                 .client
-                .invoke_rpc_without_input(flow_id, SUBSCRIPTION_DESCRIBE)
+                .invoke_rpc_without_input(flow_id, DESCRIBE_SUBSCRIPTION)
                 .expect("describe Rust Subscription Flow");
             if state.charge_cents == expected {
                 return state;
@@ -168,16 +172,16 @@ fn channel_message_can_be_moved_by_id() {
         .expect("start Rust Channel Flow");
     environment
         .client
-        .publish(&flow_id, &QUEUED, "delete me".to_string())
+        .invoke_rpc(&flow_id, ENQUEUE_CHANNEL_MESSAGE, "delete me".to_string())
         .expect("publish first queued message");
     environment
         .client
-        .publish(&flow_id, &QUEUED, "move me".to_string())
+        .invoke_rpc(&flow_id, ENQUEUE_CHANNEL_MESSAGE, "move me".to_string())
         .expect("publish second queued message");
 
     let pending = environment
         .client
-        .get_channel_messages(&flow_id, &QUEUED)
+        .invoke_rpc_without_input(&flow_id, GET_QUEUED_MESSAGES)
         .expect("list queued messages");
     assert_eq!(
         pending
@@ -188,40 +192,52 @@ fn channel_message_can_be_moved_by_id() {
     );
     environment
         .client
-        .delete_channel_message(&flow_id, &QUEUED, &pending[0].message_id)
+        .invoke_rpc(
+            &flow_id,
+            DELETE_QUEUED_MESSAGE,
+            QueuedMessageReference {
+                message_id: pending[0].message_id.clone(),
+            },
+        )
         .expect("delete first queued message");
 
-    let move_message = MoveMessage {
+    let queued_message = QueuedMessageReference {
         message_id: pending[1].message_id.clone(),
     };
     environment
         .client
-        .invoke_rpc(&flow_id, CHANNEL_MOVE, move_message.clone())
+        .invoke_rpc(
+            &flow_id,
+            MOVE_QUEUED_MESSAGE_TO_PRIORITIZED_MESSAGES,
+            queued_message.clone(),
+        )
         .expect("move queued message");
-    let moved = environment
+    let prioritized_messages = environment
         .client
-        .get_channel_messages(&flow_id, &MOVED)
-        .expect("list moved messages");
-    assert_eq!(moved[0].value, "move me");
+        .invoke_rpc_without_input(&flow_id, GET_PRIORITIZED_MESSAGES)
+        .expect("list prioritized messages");
+    assert_eq!(prioritized_messages[0].value, "move me");
 
     assert!(matches!(
-        environment
-            .client
-            .invoke_rpc(&flow_id, CHANNEL_MOVE, move_message),
+        environment.client.invoke_rpc(
+            &flow_id,
+            MOVE_QUEUED_MESSAGE_TO_PRIORITIZED_MESSAGES,
+            queued_message,
+        ),
         Err(SdkError::ChannelMessageNotFound { .. })
     ));
     assert_eq!(
         environment
             .client
-            .get_channel_messages(&flow_id, &MOVED)
-            .expect("list moved messages after failed retry")
+            .invoke_rpc_without_input(&flow_id, GET_PRIORITIZED_MESSAGES)
+            .expect("list prioritized messages after failed retry")
             .len(),
         1
     );
 
     environment
         .client
-        .invoke_rpc_without_input(&flow_id, CHANNEL_APPROVE)
+        .invoke_rpc_without_input(&flow_id, PUBLISH_APPROVAL_MESSAGE)
         .expect("approve Channel Flow");
 }
 
@@ -281,14 +297,13 @@ fn deal_dsl_completes_an_item_purchase() {
         .expect("wait for Rust Deal DSL negotiation");
     environment
         .client
-        .publish_map(
+        .invoke_rpc(
             &flow_id,
-            &DEAL_CONDITION_MESSAGES,
-            "buyer-decision",
-            [BTreeMap::from([(
-                "accepted".to_string(),
-                "true".to_string(),
-            )])],
+            SEND_DEAL_CONDITION_MESSAGE,
+            ConditionMessage {
+                condition_name: "buyer-decision".to_string(),
+                values: BTreeMap::from([("accepted".to_string(), "true".to_string())]),
+            },
         )
         .expect("accept Rust Deal DSL item purchase");
     let output: BTreeMap<String, String> = environment
@@ -333,7 +348,7 @@ fn job_posting_update_reaches_both_job_boards() {
     assert_eq!(
         environment
             .client
-            .invoke_rpc_without_input(&flow_id, JOB_POST_READ)
+            .invoke_rpc_without_input(&flow_id, GET_JOB_POST)
             .expect("read initial Rust Job Posting"),
         initial
     );
@@ -347,7 +362,7 @@ fn job_posting_update_reaches_both_job_boards() {
     assert_eq!(
         environment
             .client
-            .invoke_rpc(&flow_id, JOB_POST_UPDATE, updated)
+            .invoke_rpc(&flow_id, UPDATE_JOB_POST, updated)
             .expect("update Rust Job Posting"),
         1
     );
@@ -360,7 +375,7 @@ fn job_posting_update_reaches_both_job_boards() {
     assert_eq!(
         environment
             .client
-            .invoke_rpc(&flow_id, JOB_POST_UPDATE, newest.clone())
+            .invoke_rpc(&flow_id, UPDATE_JOB_POST, newest.clone())
             .expect("update Rust Job Posting again"),
         2
     );
@@ -383,7 +398,7 @@ fn job_posting_update_reaches_both_job_boards() {
     assert_eq!(
         environment
             .client
-            .invoke_rpc_without_input(&flow_id, JOB_POST_READ)
+            .invoke_rpc_without_input(&flow_id, GET_JOB_POST)
             .expect("read updated Rust Job Posting"),
         newest
     );
@@ -471,7 +486,7 @@ fn order_processing_happy_path() {
         .expect("wait for Rust Order Processing ChargeStep");
     let approved: String = environment
         .client
-        .invoke_rpc(&flow_id, ORDER_APPROVE, String::new())
+        .invoke_rpc(&flow_id, APPROVE_ORDER, String::new())
         .expect("approve Rust Order Processing Flow");
     assert_eq!(approved, "ok");
     let output: String = environment
@@ -508,7 +523,7 @@ fn order_processing_reminder_then_ship() {
         .expect("wait for Rust Order Processing reminder ShipStep");
     let approved: String = environment
         .client
-        .invoke_rpc(&flow_id, ORDER_APPROVE, String::new())
+        .invoke_rpc(&flow_id, APPROVE_ORDER, String::new())
         .expect("approve Rust Order Processing Flow after reminder");
     assert_eq!(approved, "ok");
     let output: String = environment
@@ -536,7 +551,7 @@ fn order_processing_ship_failure_refunds() {
         .expect("wait for Rust Order Processing ChargeStep");
     let approved: String = environment
         .client
-        .invoke_rpc(&flow_id, ORDER_APPROVE, String::new())
+        .invoke_rpc(&flow_id, APPROVE_ORDER, String::new())
         .expect("approve Rust Order Processing Flow for refund");
     assert_eq!(approved, "ok");
     let output: String = environment
@@ -611,7 +626,7 @@ fn engagement_invokes_rpcs_and_completes() {
         .client
         .invoke_rpc(
             &flow_id,
-            ENGAGEMENT_ACCEPT,
+            ACCEPT_ENGAGEMENT,
             "accepted in integration test".to_string(),
         )
         .expect("accept Rust Engagement Flow");
@@ -652,7 +667,7 @@ fn user_onboarding_verifies_and_completes_both_tasks() {
 
     let verified: String = environment
         .client
-        .invoke_rpc_without_input(&flow_id, ONBOARDING_VERIFY)
+        .invoke_rpc_without_input(&flow_id, VERIFY_ONBOARDING)
         .expect("verify onboarding email");
     assert_eq!(verified, "verified");
     environment
@@ -667,7 +682,7 @@ fn user_onboarding_verifies_and_completes_both_tasks() {
 
     let task_1: String = environment
         .client
-        .invoke_rpc_without_input(&flow_id, ONBOARDING_TASK_1)
+        .invoke_rpc_without_input(&flow_id, ACCOMPLISH_ONBOARDING_TASK_1)
         .expect("accomplish onboarding task 1");
     assert_eq!(task_1, "task 1 accomplished");
     environment
@@ -682,7 +697,7 @@ fn user_onboarding_verifies_and_completes_both_tasks() {
 
     let task_2: String = environment
         .client
-        .invoke_rpc_without_input(&flow_id, ONBOARDING_TASK_2)
+        .invoke_rpc_without_input(&flow_id, ACCOMPLISH_ONBOARDING_TASK_2)
         .expect("accomplish onboarding task 2");
     assert_eq!(task_2, "task 2 accomplished");
     let output: String = environment
@@ -716,7 +731,11 @@ fn microservice_swaps_data_and_completes_when_ready() {
         .expect("wait for initial Rust Microservice data");
     let previous = environment
         .client
-        .invoke_rpc(&flow_id, ORCHESTRATION_SWAP, "updated-data".to_string())
+        .invoke_rpc(
+            &flow_id,
+            SWAP_ORCHESTRATION_DATA,
+            "updated-data".to_string(),
+        )
         .expect("swap Rust Microservice data");
     assert_eq!(previous, "initial-data");
     environment
@@ -730,7 +749,7 @@ fn microservice_swaps_data_and_completes_when_ready() {
         .expect("wait for updated Rust Microservice data");
     environment
         .client
-        .invoke_rpc_without_input::<()>(&flow_id, ORCHESTRATION_READY)
+        .invoke_rpc_without_input::<()>(&flow_id, SIGNAL_ORCHESTRATION_READY)
         .expect("release Rust Microservice Flow");
     let output: String = environment
         .client
@@ -765,13 +784,13 @@ fn subscription_updates_charge_and_cancels() {
     assert!(!initial.cancelled);
     environment
         .client
-        .invoke_rpc(&flow_id, SUBSCRIPTION_UPDATE_CHARGE, 250)
+        .invoke_rpc(&flow_id, UPDATE_SUBSCRIPTION_CHARGE, 250)
         .expect("update Rust Subscription charge");
     let updated = environment.await_subscription_charge(&flow_id, 250);
     assert!(!updated.cancelled);
     environment
         .client
-        .invoke_rpc_without_input::<()>(&flow_id, SUBSCRIPTION_CANCEL)
+        .invoke_rpc_without_input::<()>(&flow_id, CANCEL_SUBSCRIPTION)
         .expect("cancel Rust Subscription Flow");
 
     let output: SubscriptionState = environment

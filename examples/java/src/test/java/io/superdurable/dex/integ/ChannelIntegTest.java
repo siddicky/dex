@@ -16,7 +16,6 @@
 
 package io.superdurable.dex.integ;
 
-import io.superdurable.dex.ChannelMessage;
 import io.superdurable.dex.exceptions.ChannelMessageNotFoundException;
 import io.superdurable.dex.primitives.channel.ChannelFlow;
 import org.junit.jupiter.api.Test;
@@ -35,32 +34,39 @@ public class ChannelIntegTest {
         final ChannelFlow flow = environment.channelFlow();
         final String flowId = environment.newFlowId("channel-message");
         environment.client().startFlow(flow, flowId, 30, environment.startOptions());
-        environment.client().publish(flowId, flow.queued, "delete me");
-        environment.client().publish(flowId, flow.queued, "move me");
-
-        final List<ChannelMessage<String>> pending =
-                environment.client().getChannelMessages(flowId, flow.queued);
-        assertEquals(List.of("delete me", "move me"), pending.stream()
-                .map(ChannelMessage::getValue)
-                .toList());
-        environment.client().deleteChannelMessage(flowId, flow.queued, pending.get(0).getMessageId());
-
         final ChannelFlow stub = environment.client().newRpcStub(ChannelFlow.class, flowId);
-        final ChannelFlow.MoveMessage move = new ChannelFlow.MoveMessage(pending.get(1).getMessageId());
-        environment.client().invokeRPC(stub::move, move);
-        assertEquals(List.of("move me"), environment.client().getChannelMessages(flowId, flow.moved)
+        environment.client().invokeRPC(stub::enqueueChannelMessage, "delete me");
+        environment.client().invokeRPC(stub::enqueueChannelMessage, "move me");
+
+        final List<ChannelFlow.PendingMessage> pending =
+                environment.client().invokeRPC(stub::getQueuedMessages).messages;
+        assertEquals(List.of("delete me", "move me"), pending.stream()
+                .map(message -> message.value)
+                .toList());
+        environment.client().invokeRPC(
+                stub::deleteQueuedMessage,
+                new ChannelFlow.QueuedMessageReference(pending.get(0).messageId));
+
+        final ChannelFlow.QueuedMessageReference queuedMessage =
+                new ChannelFlow.QueuedMessageReference(pending.get(1).messageId);
+        environment.client().invokeRPC(stub::moveQueuedMessageToPrioritizedMessages, queuedMessage);
+        assertEquals(List.of("move me"), environment.client()
+                .invokeRPC(stub::getPrioritizedMessages).messages
                 .stream()
-                .map(ChannelMessage::getValue)
+                .map(message -> message.value)
                 .toList());
 
         assertThrows(
                 ChannelMessageNotFoundException.class,
-                () -> environment.client().invokeRPC(stub::move, move));
-        assertEquals(List.of("move me"), environment.client().getChannelMessages(flowId, flow.moved)
+                () -> environment.client().invokeRPC(
+                        stub::moveQueuedMessageToPrioritizedMessages,
+                        queuedMessage));
+        assertEquals(List.of("move me"), environment.client()
+                .invokeRPC(stub::getPrioritizedMessages).messages
                 .stream()
-                .map(ChannelMessage::getValue)
+                .map(message -> message.value)
                 .toList());
 
-        environment.client().invokeRPC(stub::approve);
+        environment.client().invokeRPC(stub::publishApprovalMessage);
     }
 }
