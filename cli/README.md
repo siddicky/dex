@@ -39,15 +39,23 @@ GitHub cannot be reached.
 dexcli dev
 ```
 
-The default endpoints are:
+The local port conventions are:
 
-| Service | Address |
-|---|---|
-| Dex Web | `http://127.0.0.1:8802` |
-| Dex Server | `127.0.0.1:8801` |
+| Component | Default endpoint | Purpose |
+|---|---|---|
+| Dex Server | `127.0.0.1:8801` | FlowService and InternalService gRPC |
+| Dex Web | `http://127.0.0.1:8802` | Dex Web HTTP UI and API |
+| SDK Worker | port `8803` | Application-owned WorkerService gRPC |
+| Codec Server | `http://127.0.0.1:8804` | Temporal payload Codec HTTP API |
+| Temporal Server | `127.0.0.1:7233` | Local Temporal gRPC |
+| Temporal Web | `http://127.0.0.1:8233` | Local Temporal UI |
 
-If a default port is already in use, `dexcli dev` binds the next free port and
-prints the addresses it selected. Running several `dexcli dev` processes on the
+`dexcli dev` starts Dex Server, Dex Web, Temporal Server, and Temporal Web. An
+application starts its own SDK Worker, while `dexcli codec-server` starts the
+Codec Server separately.
+
+If a `dexcli dev` port is already in use, it binds the next free port and prints
+the Dex addresses it selected. Running several `dexcli dev` processes on the
 same machine therefore starts isolated stacks: distinct Dex ports, a distinct
 local Temporal server, and a distinct SQLite database. Point later CLI commands
 at a non-default stack with `--server` or `DEX_FLOW_SERVICE_ADDRESS`.
@@ -126,10 +134,29 @@ must exist and be reachable before startup.
 --external-temporal-namespace string    external Temporal namespace (default default)
 ```
 
-Local Temporal gRPC and Web ports are assigned automatically. Operators can
-point Dex at an existing Temporal with `--external-temporal-address` and
+Local Temporal gRPC and Web ports start at `7233` and `8233` and move to free
+ports automatically. Operators can point Dex at an existing Temporal with
+`--external-temporal-address` and
 `--external-temporal-namespace`. Dex does not print those endpoints, and
 application developers do not need them.
+
+## View Temporal Cloud protobuf payloads
+
+Start the local protobuf Codec Server:
+
+```bash
+dexcli codec-server
+```
+
+It listens on `http://127.0.0.1:8804`. Use `--address` to select another
+loopback address. In Temporal Cloud, choose **Configure Codec Server**, select
+**Use my browser setting and ignore Namespace-level setting**, and enter that
+URL. Allow Chrome Local Network Access when prompted. Stop the server with
+Ctrl+C.
+
+The browser connects directly to this local process. The server accepts only
+the `https://cloud.temporal.io` browser origin and must not be exposed beyond
+the local machine.
 
 ## Operate flows
 
