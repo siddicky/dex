@@ -362,6 +362,44 @@ type WaitForFlowOptions struct {
 	NeedsResults bool
 }
 
+// WaitForStepCompletionOptions configures one durable Step completion wait.
+//
+// When RequestID is empty, the server derives a stable ID from the Step
+// execution. Reuse an override only when retrying the same Step completion
+// wait. MaximumWaitTime bounds the Temporal Update handler across transport
+// retries and Continue-As-New. Zero waits indefinitely. Positive values must
+// be whole seconds within int32 range.
+// An abandoned infinite wait remains in flight until it matches or the Flow closes.
+//
+//	options := dex.WaitForStepCompletionOptions{
+//		MaximumWaitTime: time.Hour,
+//	}
+type WaitForStepCompletionOptions struct {
+	// RequestID overrides the stable ID derived from the Step execution.
+	RequestID string
+	// MaximumWaitTime bounds the handler lifetime. Zero waits indefinitely.
+	MaximumWaitTime time.Duration
+}
+
+// WaitForAttributeOptions configures one durable Attribute match wait.
+//
+// When RequestID is empty, the server derives a stable ID from the Attribute
+// condition. Reuse an override only when retrying the same Attribute match.
+// MaximumWaitTime bounds the Temporal Update handler across transport retries
+// and Continue-As-New. Zero waits indefinitely. Positive values must be whole
+// seconds within int32 range.
+// An abandoned infinite wait remains in flight until it matches or the Flow closes.
+//
+//	options := dex.WaitForAttributeOptions{
+//		MaximumWaitTime: time.Hour,
+//	}
+type WaitForAttributeOptions struct {
+	// RequestID overrides the stable ID derived from the Attribute condition.
+	RequestID string
+	// MaximumWaitTime bounds the handler lifetime. Zero waits indefinitely.
+	MaximumWaitTime time.Duration
+}
+
 // StopType selects how StopFlow ends an active Flow.
 type StopType uint8
 

@@ -345,6 +345,17 @@ buffered sets and deletes. The matching `ChannelMap` methods are RPC-only,
 include buffered publishes, and omit empty instances. Keys are decoded and
 sorted. Use `force_complete_if_channels_empty(...)` for conditional completion.
 
+Request IDs are optional for both durable waits. When omitted, the server
+derives a namespaced stable ID from the Step execution or Attribute condition,
+such as `wait-for-attribute:myInt>10`. Reuse an override only for the same
+logical wait. The Client automatically reattaches transport long polls. If an
+earlier Update with that ID exhausted its handler budget, the server appends an
+increasing `-N` suffix and starts a new Update. `maximum_wait_time` is optional
+and is the total handler budget across reattachments; zero waits indefinitely.
+A positive budget expiry raises `WaitHandlerTimeoutError`. An abandoned infinite
+wait remains accepted and counts against Temporal's in-flight Update limit until
+it completes or the Flow closes.
+
 `Client.wait_for_flow` and `AsyncClient.wait_for_flow` return a
 `FlowResult` after hydrating every output-bearing completion. Use
 `single_output` only when the Flow contract produces exactly one output:

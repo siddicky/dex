@@ -259,9 +259,17 @@ fn test_workflow_wait_for_step_completion() {
         .wait_for_step_completion(
             &flow_id,
             StepExecutionId::of(&workflow.second),
-            Duration::from_secs(30),
+            dex_sdk::WaitForStepCompletionOptions::new(),
         )
         .expect("wait for second Step");
+    environment
+        .client
+        .wait_for_step_completion(
+            &flow_id,
+            StepExecutionId::of(&workflow.second),
+            dex_sdk::WaitForStepCompletionOptions::new().maximum_wait_time(Duration::from_secs(30)),
+        )
+        .expect("reuse server-derived Step wait ID");
     assert_eq!(
         7,
         environment
@@ -385,6 +393,8 @@ fn compile_describe_and_step_wait(client: &Client) -> SdkResult<()> {
     client.wait_for_step_completion(
         "basic",
         StepExecutionId::of(&workflow.second),
-        Duration::from_secs(5),
+        dex_sdk::WaitForStepCompletionOptions::new()
+            .request_id("wait-basic-second-step")
+            .maximum_wait_time(Duration::from_secs(5)),
     )
 }

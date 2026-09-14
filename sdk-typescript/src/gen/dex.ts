@@ -172,6 +172,7 @@ export enum ErrorSubStatus {
   ERROR_SUB_STATUS_WORKER_API_ERROR = 4,
   ERROR_SUB_STATUS_LONG_POLL_TIME_OUT = 5,
   ERROR_SUB_STATUS_CHANNEL_MESSAGE_NOT_FOUND = 6,
+  ERROR_SUB_STATUS_WAIT_HANDLER_TIME_OUT = 7,
   UNRECOGNIZED = -1,
 }
 
@@ -927,8 +928,12 @@ export interface WaitForStepCompletionRequest {
   /** Identifies a step execution by type and its per-type execution number. */
   stepType: string;
   stepExecutionNumber: string;
+  /** Zero waits indefinitely; positive values bound the Temporal Update handler. */
   waitTimeSeconds: number;
-  /** Required per-call UUID is SDK-generated and future-overridable; identical retries reuse it. Server forwards run-scoped UpdateID; Continue-as-New resets scope. */
+  /**
+   * Optional logical idempotency key. Empty derives wait-for-step-completion:{Step execution ID}.
+   * Reusing a handler-timed-out logical key advances an increasing -N generation.
+   */
   requestId: string;
 }
 
@@ -940,9 +945,12 @@ export interface WaitForAttributeRequest {
   match:
     | AttributeMatch
     | undefined;
-  /** Zero/omit checks once; positive waits until match or timeout. */
+  /** Zero waits indefinitely; positive values bound the Temporal Update handler. */
   waitTimeSeconds: number;
-  /** Required per-call UUID is SDK-generated and future-overridable; identical retries reuse it. Server forwards run-scoped UpdateID; Continue-as-New resets scope. */
+  /**
+   * Optional logical idempotency key. Empty derives wait-for-attribute:{encoded condition}.
+   * Reusing a handler-timed-out logical key advances an increasing -N generation.
+   */
   requestId: string;
 }
 

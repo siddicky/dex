@@ -120,7 +120,7 @@ private static final long serialVersionUID = 0L;
   private int waitTimeSeconds_ = 0;
   /**
    * <pre>
-   * Zero/omit checks once; positive waits until match or timeout.
+   * Zero waits indefinitely; positive values bound the Temporal Update handler.
    * </pre>
    *
    * <code>int32 wait_time_seconds = 3;</code>
@@ -136,7 +136,8 @@ private static final long serialVersionUID = 0L;
   private volatile java.lang.Object requestId_ = "";
   /**
    * <pre>
-   * Required per-call UUID is SDK-generated and future-overridable; identical retries reuse it. Server forwards run-scoped UpdateID; Continue-as-New resets scope.
+   * Optional logical idempotency key. Empty derives wait-for-attribute:{encoded condition}.
+   * Reusing a handler-timed-out logical key advances an increasing -N generation.
    * </pre>
    *
    * <code>string request_id = 4;</code>
@@ -157,7 +158,8 @@ private static final long serialVersionUID = 0L;
   }
   /**
    * <pre>
-   * Required per-call UUID is SDK-generated and future-overridable; identical retries reuse it. Server forwards run-scoped UpdateID; Continue-as-New resets scope.
+   * Optional logical idempotency key. Empty derives wait-for-attribute:{encoded condition}.
+   * Reusing a handler-timed-out logical key advances an increasing -N generation.
    * </pre>
    *
    * <code>string request_id = 4;</code>
@@ -764,7 +766,7 @@ private static final long serialVersionUID = 0L;
     private int waitTimeSeconds_ ;
     /**
      * <pre>
-     * Zero/omit checks once; positive waits until match or timeout.
+     * Zero waits indefinitely; positive values bound the Temporal Update handler.
      * </pre>
      *
      * <code>int32 wait_time_seconds = 3;</code>
@@ -776,7 +778,7 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Zero/omit checks once; positive waits until match or timeout.
+     * Zero waits indefinitely; positive values bound the Temporal Update handler.
      * </pre>
      *
      * <code>int32 wait_time_seconds = 3;</code>
@@ -792,7 +794,7 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Zero/omit checks once; positive waits until match or timeout.
+     * Zero waits indefinitely; positive values bound the Temporal Update handler.
      * </pre>
      *
      * <code>int32 wait_time_seconds = 3;</code>
@@ -808,7 +810,8 @@ private static final long serialVersionUID = 0L;
     private java.lang.Object requestId_ = "";
     /**
      * <pre>
-     * Required per-call UUID is SDK-generated and future-overridable; identical retries reuse it. Server forwards run-scoped UpdateID; Continue-as-New resets scope.
+     * Optional logical idempotency key. Empty derives wait-for-attribute:{encoded condition}.
+     * Reusing a handler-timed-out logical key advances an increasing -N generation.
      * </pre>
      *
      * <code>string request_id = 4;</code>
@@ -828,7 +831,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Required per-call UUID is SDK-generated and future-overridable; identical retries reuse it. Server forwards run-scoped UpdateID; Continue-as-New resets scope.
+     * Optional logical idempotency key. Empty derives wait-for-attribute:{encoded condition}.
+     * Reusing a handler-timed-out logical key advances an increasing -N generation.
      * </pre>
      *
      * <code>string request_id = 4;</code>
@@ -849,7 +853,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Required per-call UUID is SDK-generated and future-overridable; identical retries reuse it. Server forwards run-scoped UpdateID; Continue-as-New resets scope.
+     * Optional logical idempotency key. Empty derives wait-for-attribute:{encoded condition}.
+     * Reusing a handler-timed-out logical key advances an increasing -N generation.
      * </pre>
      *
      * <code>string request_id = 4;</code>
@@ -866,7 +871,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Required per-call UUID is SDK-generated and future-overridable; identical retries reuse it. Server forwards run-scoped UpdateID; Continue-as-New resets scope.
+     * Optional logical idempotency key. Empty derives wait-for-attribute:{encoded condition}.
+     * Reusing a handler-timed-out logical key advances an increasing -N generation.
      * </pre>
      *
      * <code>string request_id = 4;</code>
@@ -880,7 +886,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Required per-call UUID is SDK-generated and future-overridable; identical retries reuse it. Server forwards run-scoped UpdateID; Continue-as-New resets scope.
+     * Optional logical idempotency key. Empty derives wait-for-attribute:{encoded condition}.
+     * Reusing a handler-timed-out logical key advances an increasing -N generation.
      * </pre>
      *
      * <code>string request_id = 4;</code>

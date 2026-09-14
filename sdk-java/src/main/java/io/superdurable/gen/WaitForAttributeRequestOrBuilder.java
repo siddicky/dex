@@ -39,7 +39,7 @@ public interface WaitForAttributeRequestOrBuilder extends
 
   /**
    * <pre>
-   * Zero/omit checks once; positive waits until match or timeout.
+   * Zero waits indefinitely; positive values bound the Temporal Update handler.
    * </pre>
    *
    * <code>int32 wait_time_seconds = 3;</code>
@@ -49,7 +49,8 @@ public interface WaitForAttributeRequestOrBuilder extends
 
   /**
    * <pre>
-   * Required per-call UUID is SDK-generated and future-overridable; identical retries reuse it. Server forwards run-scoped UpdateID; Continue-as-New resets scope.
+   * Optional logical idempotency key. Empty derives wait-for-attribute:{encoded condition}.
+   * Reusing a handler-timed-out logical key advances an increasing -N generation.
    * </pre>
    *
    * <code>string request_id = 4;</code>
@@ -58,7 +59,8 @@ public interface WaitForAttributeRequestOrBuilder extends
   java.lang.String getRequestId();
   /**
    * <pre>
-   * Required per-call UUID is SDK-generated and future-overridable; identical retries reuse it. Server forwards run-scoped UpdateID; Continue-as-New resets scope.
+   * Optional logical idempotency key. Empty derives wait-for-attribute:{encoded condition}.
+   * Reusing a handler-timed-out logical key advances an increasing -N generation.
    * </pre>
    *
    * <code>string request_id = 4;</code>

@@ -221,6 +221,17 @@ and `getAllInstanceKeys` include buffered sets and deletes. The matching
 instances. Keys are decoded and sorted. Use
 `forceCompleteIfChannelsEmpty(...)` for conditional completion.
 
+Request IDs are optional for both durable waits. When omitted, the server
+derives a namespaced stable ID from the Step execution or Attribute condition,
+such as `wait-for-attribute:myInt>10`. Reuse an override only for the same
+logical wait. The Client automatically reattaches transport long polls. If an
+earlier Update with that ID exhausted its handler budget, the server appends an
+increasing `-N` suffix and starts a new Update. `maximumWaitTimeMs` is optional
+and is the total handler budget across reattachments; omit it or use zero to
+wait indefinitely. A positive budget expiry throws `WaitHandlerTimeoutError`.
+An abandoned infinite wait remains accepted and counts against Temporal's
+in-flight Update limit until it completes or the Flow closes.
+
 ### Async handlers
 
 `Step.execute`, `Step.waitFor`, and RPC methods may be `async` and return a

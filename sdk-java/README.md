@@ -400,6 +400,17 @@ include buffered publishes, and omit empty instances. Returned keys are decoded
 and sorted. Conditional completion is
 `StepDecision.forceCompleteIfChannelsEmpty(...)`.
 
+Request IDs are optional for both durable waits. When omitted, the server
+derives a namespaced stable ID from the Step execution or Attribute condition,
+such as `wait-for-attribute:myInt>10`. Reuse an override only for the same
+logical wait. The Client automatically reattaches transport long polls. If an
+earlier Update with that ID exhausted its handler budget, the server appends an
+increasing `-N` suffix and starts a new Update. The maximum wait time is optional
+and is the total handler budget across reattachments; zero waits indefinitely.
+A positive budget expiry throws `WaitHandlerTimeoutException`. An abandoned
+infinite wait remains accepted and counts against Temporal's in-flight Update
+limit until it completes or the Flow closes.
+
 ## Exceptions
 
 Public exceptions live in `io.superdurable.dex.exceptions`. Catch concrete
@@ -428,6 +439,8 @@ configuration, and step-wait operations that require an open Flow.
 
 `FlowAlreadyStartedException` identifies duplicate starts.
 `LongPollTimeoutException` identifies an expected long-poll timeout.
+`WaitHandlerTimeoutException` identifies an exhausted caller-defined durable
+wait budget.
 `Client.waitForFlow` returns `FlowResult` for successful and unsuccessful
 terminal statuses. Inspect `getStatus`, `getErrorType`, and `getErrorMessage`
 before decoding outputs from an unsuccessful result.

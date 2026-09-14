@@ -19,6 +19,22 @@ export interface ClientOptions {
   readonly workerTarget?: WorkerTarget;
 }
 
+/** Configures one durable Step completion wait. An abandoned infinite wait remains in flight until completion or Flow closure. */
+export interface WaitForStepCompletionOptions {
+  /** Overrides the stable Request ID that the server derives from the Step execution. */
+  readonly requestId?: string;
+  /** Total handler wait budget in milliseconds. Omit or use zero to wait indefinitely. */
+  readonly maximumWaitTimeMs?: number;
+}
+
+/** Configures one durable Attribute match wait. An abandoned infinite wait remains in flight until a match or Flow closure. */
+export interface WaitForAttributeOptions {
+  /** Overrides the stable Request ID that the server derives from the Attribute condition. */
+  readonly requestId?: string;
+  /** Total handler wait budget in milliseconds. Omit or use zero to wait indefinitely. */
+  readonly maximumWaitTimeMs?: number;
+}
+
 /** Controls which active Steps are included in Flow search indexing. */
 export const ActiveStepSearchMode = Object.freeze({
   /** Uses the Dex server's current default policy. */
