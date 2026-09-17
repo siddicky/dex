@@ -6,7 +6,8 @@
 
 Unlike replay-based durable execution engines, Dex does not split your logic into deterministic workflow code and separate activities—Worker handlers are ordinary code, and Attribute data lives in a blob store you can sync to databases you already run.
 
-<img width="921" height="664" alt="dex-arch2" src="https://github.com/user-attachments/assets/fe91af8a-58e7-4688-9f01-057a25db7bc4" />
+<img width="901" height="719" alt="dex-arch3" src="https://github.com/user-attachments/assets/4b70a5ec-8c94-4f13-acc4-8f7958245bda" />
+
 
 
 Learn more: [What is Durable Execution?](https://docs.superdurable.io/intro/what-is-durable-execution) · [Why Dex?](https://docs.superdurable.io/intro/what-is-dex)
