@@ -86,6 +86,40 @@ interpreter:
 	require.ErrorContains(t, err, "minimumStepHeartbeatTimeout must be non-negative")
 }
 
+func TestTypeSafeConfigDefaultsToDisabled(t *testing.T) {
+	path := writeTestConfig(t, `
+api:
+  port: 8801
+`)
+	cfg, err := NewConfig(path)
+	require.NoError(t, err)
+	require.False(t, cfg.TypeSafe.Enabled)
+	require.Empty(t, cfg.TypeSafe.Endpoint)
+	require.Empty(t, cfg.TypeSafe.APIKeyEnvVar)
+}
+
+func TestTypeSafeConfigParsesAllFields(t *testing.T) {
+	path := writeTestConfig(t, `
+typeSafe:
+  enabled: true
+  endpoint: https://example.test/v1/systemone
+  model: jev-latest
+  apiKeyEnvVar: MY_TYPESAFE_KEY
+  timeout: 5s
+  maxConcurrentRequests: 3
+`)
+	cfg, err := NewConfig(path)
+	require.NoError(t, err)
+	require.Equal(t, TypeSafeConfig{
+		Enabled:               true,
+		Endpoint:              "https://example.test/v1/systemone",
+		Model:                 "jev-latest",
+		APIKeyEnvVar:          "MY_TYPESAFE_KEY",
+		Timeout:               5 * time.Second,
+		MaxConcurrentRequests: 3,
+	}, cfg.TypeSafe)
+}
+
 func TestCleanupStrategyCronSchedule(t *testing.T) {
 	testCases := []struct {
 		name             string

@@ -107,3 +107,8 @@ blobStore:
 
 streamStore:
   backend: memory
+
+# TypeSafe stays disabled until an operator opts in and sets the API key's
+# environment variable (TYPESAFE_API_KEY by default). Never put the key itself here.
+# typeSafe:
+#   enabled: true

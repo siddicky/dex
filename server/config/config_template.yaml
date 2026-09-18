@@ -77,3 +77,12 @@ blobStore:
 #   trimLeaseRetry: 100ms
 #   trimBatchYieldTime: 1ms
 #   trimWorkers: 4
+# TypeSafe stays disabled until an operator opts in and sets the API key's
+# environment variable (TYPESAFE_API_KEY by default). Never put the key itself here.
+# typeSafe:
+#   enabled: true
+#   endpoint: https://api.typesafe.ai/v1/systemone
+#   model: jev-latest
+#   apiKeyEnvVar: TYPESAFE_API_KEY
+#   timeout: 10s
+#   maxConcurrentRequests: 8
