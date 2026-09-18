@@ -55,7 +55,9 @@ type Field struct {
 	Name    string
 	Meaning string
 	Kind    FieldKind
-	Values  []string // populated only when Kind is FieldKindEnum
+	// Values maps each enum value to a real description, per TypeSafe's own
+	// guidance, rather than repeating the value back as its own criterion.
+	Values map[string]string
 }
 
 // timeField names the two built-in timestamp fields, handled separately from
@@ -87,7 +89,15 @@ var builtInFields = []Field{
 	{
 		Name: "ExecutionStatus", Kind: FieldKindEnum,
 		Meaning: "the run's lifecycle status",
-		Values:  []string{"Running", "Completed", "Failed", "Canceled", "Terminated", "ContinuedAsNew", "TimedOut"},
+		Values: map[string]string{
+			"Running":        "the run is still in progress",
+			"Completed":      "the run finished successfully",
+			"Failed":         "the run ended in an application or infrastructure failure",
+			"Canceled":       "the run was canceled before it finished",
+			"Terminated":     "the run was forcibly stopped by an operator",
+			"ContinuedAsNew": "the run finished this execution and continued into a fresh run to reset its history",
+			"TimedOut":       "the run exceeded its configured Flow timeout and was stopped",
+		},
 	},
 	{Name: "WorkflowId", Kind: FieldKindKeyword, Meaning: "the Flow ID"},
 	{Name: "RunId", Kind: FieldKindKeyword, Meaning: "the run ID"},
@@ -123,16 +133,20 @@ func candidateLiterals(request string) []string {
 
 // BuildQuestions returns every question Interpret sends to TypeSafe in one
 // batch for the given request and customFields, alongside the built-in
-// fields. Every question is asked speculatively; Compose reads only the
-// answers a field's own constrained Noul clears the threshold for.
+// fields. Every question is asked speculatively.
+//
+// Non-enum fields also ask a constrained Noul gate; enum fields skip it,
+// per calibration data on each kind's reliability (see Compose).
 func BuildQuestions(request string, customFields []Field) map[string]typesafe.Question {
 	fields := allFields(customFields)
 	literals := candidateLiterals(request)
 
 	questions := make(map[string]typesafe.Question, len(fields)*3+2)
 	for _, field := range fields {
-		questions[constrainedQuestionID(field.Name)] = typesafe.NoulQuestion(
-			fmt.Sprintf("Does `request` state a constraint on %s (%s)?", field.Name, field.Meaning), nil)
+		if field.Kind != FieldKindEnum {
+			questions[constrainedQuestionID(field.Name)] = typesafe.NoulQuestion(
+				fmt.Sprintf("Does `request` state a constraint on %s (%s)?", field.Name, field.Meaning), nil)
+		}
 		questions[operatorQuestionID(field.Name)] = typesafe.ChoiceQuestion(
 			fmt.Sprintf("Which comparison does `request` use for %s, if it constrains it?", field.Name),
 			operatorCriteria(field.Kind))
@@ -183,7 +197,7 @@ func valueQuestion(field Field, literals []string) typesafe.Question {
 	if field.Kind == FieldKindEnum {
 		return typesafe.ChoiceQuestion(
 			fmt.Sprintf("Which value of %s does `request` name, if it constrains it?", field.Name),
-			withNone(valuesToCriteria(field.Values)))
+			withNone(copyCriteria(field.Values)))
 	}
 	return typesafe.ChoiceQuestion(
 		fmt.Sprintf("Which literal from `literals` does `request` intend for %s, if it constrains it?", field.Name),
@@ -201,12 +215,14 @@ func operatorCriteria(kind FieldKind) map[string]string {
 	return map[string]string{"=": "equal to", "!=": "not equal to"}
 }
 
-func valuesToCriteria(values []string) map[string]string {
-	criteria := make(map[string]string, len(values))
-	for _, value := range values {
-		criteria[value] = value
+// copyCriteria copies criteria so withNone can add "none" without mutating
+// a shared map like Field.Values.
+func copyCriteria(criteria map[string]string) map[string]string {
+	copied := make(map[string]string, len(criteria))
+	for key, value := range criteria {
+		copied[key] = value
 	}
-	return criteria
+	return copied
 }
 
 func literalsToCriteria(literals []string) map[string]string {

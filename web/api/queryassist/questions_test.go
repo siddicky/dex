@@ -30,19 +30,22 @@ func TestParseFieldKindRejectsEnumAndUnknownKinds(t *testing.T) {
 	require.ErrorContains(t, err, `unknown field kind "bogus"`)
 }
 
-func TestBuildQuestionsAsksThreeQuestionsPerFieldPlusTimeQuestions(t *testing.T) {
+func TestBuildQuestionsAsksAConstrainedGateForNonEnumFieldsOnly(t *testing.T) {
 	customFields := []Field{
 		{Name: "OrderStatus", Kind: FieldKindKeyword, Meaning: "the order's status"},
 		{Name: "Amount", Kind: FieldKindNumber, Meaning: "the order amount"},
 	}
 	questions := BuildQuestions("failed orders over 100 from yesterday", customFields)
 
-	// 4 built-ins + 2 custom fields, 3 questions each, plus the 2 time questions.
-	require.Len(t, questions, (4+2)*3+2)
+	// 1 enum built-in (2 questions) + 3 keyword/number built-ins and 2 custom
+	// fields (3 questions each), plus the 2 time questions.
+	require.Len(t, questions, 1*2+5*3+2)
 	require.Contains(t, questions, "OrderStatus.constrained")
 	require.Contains(t, questions, "OrderStatus.operator")
 	require.Contains(t, questions, "OrderStatus.value")
+	require.Contains(t, questions, "Amount.constrained")
 	require.Contains(t, questions, "Amount.operator")
+	require.NotContains(t, questions, "ExecutionStatus.constrained")
 	require.Contains(t, questions, timeFieldQuestionID)
 	require.Contains(t, questions, timeWindowQuestionID)
 }
@@ -71,6 +74,21 @@ func TestBuildQuestionsOffersOnlyDeclaredEnumValuesPlusNone(t *testing.T) {
 	require.Contains(t, criteria, "Failed")
 	require.Contains(t, criteria, "none")
 	require.NotContains(t, criteria, "InProgress")
+}
+
+// TestBuildQuestionsGivesEveryEnumValueARealDescription guards against a
+// criterion that just repeats its own name. A live calibration run found
+// the model reliably chose self-describing values like "Failed" but missed
+// less obvious ones like "TimedOut" when their only criterion was "TimedOut".
+func TestBuildQuestionsGivesEveryEnumValueARealDescription(t *testing.T) {
+	questions := BuildQuestions("failed flows", nil)
+	criteria := questions["ExecutionStatus.value"].Criteria.(map[string]string)
+	for value, description := range criteria {
+		if value == "none" {
+			continue
+		}
+		require.NotEqual(t, value, description, "criterion for %q must describe it, not repeat it", value)
+	}
 }
 
 func TestCandidateLiteralsExtractsQuotedAndBareTokensWithoutDuplicates(t *testing.T) {

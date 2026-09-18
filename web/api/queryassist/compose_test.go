@@ -27,17 +27,18 @@ func noulAnswer(probability float64) typesafe.Answer {
 	return typesafe.Answer{Type: typesafe.QuestionTypeNoul, Noul: probability}
 }
 
-// baseAnswers returns a response where nothing is constrained: every field
-// Compose considers (the built-ins plus customFields) answers "not
-// constrained" / "none". Tests override just the answers relevant to the
-// case under test.
+// baseAnswers returns a response where every field Compose considers (the
+// built-ins plus customFields) answers "none" / not constrained. Tests
+// override just the answers relevant to the case under test.
 func baseAnswers(customFields []Field) map[string]typesafe.Answer {
 	answers := map[string]typesafe.Answer{
 		timeFieldQuestionID:  choiceAnswer(timeFieldNone, 0.95),
 		timeWindowQuestionID: choiceAnswer("none", 0.95),
 	}
 	for _, field := range allFields(customFields) {
-		answers[constrainedQuestionID(field.Name)] = noulAnswer(0.05)
+		if field.Kind != FieldKindEnum {
+			answers[constrainedQuestionID(field.Name)] = noulAnswer(0.05)
+		}
 		answers[operatorQuestionID(field.Name)] = choiceAnswer("=", 0.9)
 		answers[valueQuestionID(field.Name)] = choiceAnswer("none", 0.9)
 	}
@@ -53,9 +54,26 @@ func TestComposeReturnsNeedsReviewWhenNothingIsConstrained(t *testing.T) {
 	require.True(t, result.NeedsReview)
 }
 
+// TestComposeSkipsANonEnumFieldNotConstrainedEvenIfValueNamedALiteral guards
+// a live-calibration finding: without this gate, a keyword field's value
+// question routinely named some literal from the request even when that
+// field was never actually mentioned (e.g. FlowType = "hello" for the
+// request "hello"). The gate must win even when the value question answers
+// confidently.
+func TestComposeSkipsANonEnumFieldNotConstrainedEvenIfValueNamedALiteral(t *testing.T) {
+	answers := baseAnswers(nil)
+	answers[constrainedQuestionID("FlowType")] = noulAnswer(0.1) // below constrainedThreshold
+	answers[operatorQuestionID("FlowType")] = choiceAnswer("=", 0.95)
+	answers[valueQuestionID("FlowType")] = choiceAnswer("hello", 0.95) // confidently wrong
+	response := &typesafe.Response{Answers: answers}
+
+	result, err := Compose(response, nil, time.Now())
+	require.NoError(t, err)
+	require.Empty(t, result.Filters)
+}
+
 func TestComposeProducesAFilterForAConstrainedEnumField(t *testing.T) {
 	answers := baseAnswers(nil)
-	answers[constrainedQuestionID("ExecutionStatus")] = noulAnswer(0.92)
 	answers[operatorQuestionID("ExecutionStatus")] = choiceAnswer("=", 0.9)
 	answers[valueQuestionID("ExecutionStatus")] = choiceAnswer("Failed", 0.85)
 	response := &typesafe.Response{Answers: answers}
@@ -82,7 +100,6 @@ func TestComposeProducesAFilterForAConstrainedCustomKeywordField(t *testing.T) {
 
 func TestComposeRejectsAHallucinatedEnumValue(t *testing.T) {
 	answers := baseAnswers(nil)
-	answers[constrainedQuestionID("ExecutionStatus")] = noulAnswer(0.9)
 	answers[operatorQuestionID("ExecutionStatus")] = choiceAnswer("=", 0.9)
 	// "InProgress" was never offered as a criterion for ExecutionStatus.
 	answers[valueQuestionID("ExecutionStatus")] = choiceAnswer("InProgress", 0.9)
@@ -94,7 +111,6 @@ func TestComposeRejectsAHallucinatedEnumValue(t *testing.T) {
 
 func TestComposeRejectsAnOperatorItNeverOffered(t *testing.T) {
 	answers := baseAnswers(nil)
-	answers[constrainedQuestionID("ExecutionStatus")] = noulAnswer(0.9)
 	// ">" is not a valid operator for an enum field.
 	answers[operatorQuestionID("ExecutionStatus")] = choiceAnswer(">", 0.9)
 	answers[valueQuestionID("ExecutionStatus")] = choiceAnswer("Failed", 0.9)

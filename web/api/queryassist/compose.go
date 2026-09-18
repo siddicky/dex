@@ -16,9 +16,10 @@ import (
 )
 
 const (
-	// constrainedThreshold is the minimum Noul probability for treating a
-	// field as constrained at all. Below it, the field is left out of the
-	// result the same as if TypeSafe had said no.
+	// constrainedThreshold gates a non-enum field's literal-selection value
+	// question. Below it, the field is skipped even if that question named a
+	// literal: calibration found it prone to picking an irrelevant bare word
+	// rather than "none". Enum fields skip this gate; see composeField.
 	constrainedThreshold = 0.6
 	// reviewThreshold is the minimum weakest confidence across the filters
 	// actually produced for Result.NeedsReview to be false. Below it, the
@@ -88,21 +89,18 @@ func Compose(response *typesafe.Response, customFields []Field, now time.Time) (
 	}, nil
 }
 
+// composeField applies constrainedThreshold to a non-enum field only, per
+// BuildQuestions's rationale; an enum field relies solely on its value
+// question answering "none".
 func composeField(response *typesafe.Response, field Field) ([]Filter, []string, error) {
-	constrained, err := response.Noul(constrainedQuestionID(field.Name))
-	if err != nil {
-		return nil, nil, err
-	}
-	if constrained < constrainedThreshold {
-		return nil, nil, nil
-	}
-
-	operator, _, err := response.Choice(operatorQuestionID(field.Name))
-	if err != nil {
-		return nil, nil, err
-	}
-	if !validOperator(operator, field.Kind) {
-		return nil, nil, fmt.Errorf("queryassist: field %q got operator %q, which BuildQuestions never offered it", field.Name, operator)
+	if field.Kind != FieldKindEnum {
+		constrained, err := response.Noul(constrainedQuestionID(field.Name))
+		if err != nil {
+			return nil, nil, err
+		}
+		if constrained < constrainedThreshold {
+			return nil, nil, nil
+		}
 	}
 
 	value, _, err := response.Choice(valueQuestionID(field.Name))
@@ -112,8 +110,17 @@ func composeField(response *typesafe.Response, field Field) ([]Filter, []string,
 	if value == "none" {
 		return nil, nil, nil
 	}
-	if field.Kind == FieldKindEnum && !containsString(field.Values, value) {
+	_, validEnumValue := field.Values[value]
+	if field.Kind == FieldKindEnum && !validEnumValue {
 		return nil, nil, fmt.Errorf("queryassist: field %q got value %q, which BuildQuestions never offered it", field.Name, value)
+	}
+
+	operator, _, err := response.Choice(operatorQuestionID(field.Name))
+	if err != nil {
+		return nil, nil, err
+	}
+	if !validOperator(operator, field.Kind) {
+		return nil, nil, fmt.Errorf("queryassist: field %q got operator %q, which BuildQuestions never offered it", field.Name, operator)
 	}
 
 	filter := Filter{ID: filterID(field.Name, "value"), Field: field.Name, Operator: operator, Value: value}
@@ -217,13 +224,4 @@ func filterID(field string, suffix string) string {
 func validOperator(operator string, kind FieldKind) bool {
 	_, ok := operatorCriteria(kind)[operator]
 	return ok
-}
-
-func containsString(values []string, target string) bool {
-	for _, value := range values {
-		if value == target {
-			return true
-		}
-	}
-	return false
 }
