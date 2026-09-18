@@ -33,3 +33,30 @@ func TestParseTimeRawUnixNano(t *testing.T) {
 	_, err = ParseRFC3339Nano("20240101")
 	require.Error(t, err)
 }
+
+func TestParseTimeRangeShortAndLongForm(t *testing.T) {
+	before := time.Now()
+	parsed, err := ParseTime("3d")
+	require.NoError(t, err)
+	require.WithinDuration(t, before.Add(-3*24*time.Hour), time.Unix(0, parsed), time.Minute)
+
+	parsed, err = ParseTime("3day")
+	require.NoError(t, err)
+	require.WithinDuration(t, before.Add(-3*24*time.Hour), time.Unix(0, parsed), time.Minute)
+}
+
+// TestParseTimeRangeRejectsUnknownUnit guards against the range validation
+// silently accepting a value neither the short-form nor long-form grammar
+// describes. The check must actually reject, not just discard a match result.
+func TestParseTimeRangeRejectsUnknownUnit(t *testing.T) {
+	_, err := ParseTime("3days")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "cannot parse timeRange")
+}
+
+func TestParseTimeErrorMessageNamesTheOffendingInput(t *testing.T) {
+	_, err := ParseTime("not-a-time")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "cannot parse time 'not-a-time'")
+	require.ErrorContains(t, err, DateTimeFormat)
+}

@@ -47,7 +47,7 @@ func ParseTime(timeStr string) (int64, error) {
 	parsedTime, err := parseTimeRange(timeStr)
 	if err != nil {
 		return 0, fmt.Errorf("cannot parse time '%s', use UTC format %v, "+
-			"time range or raw UnixNano directly. See help for more details: %v", DateTimeFormat, timeStr, err)
+			"time range or raw UnixNano directly. See help for more details: %v", timeStr, DateTimeFormat, err)
 	}
 	return parsedTime.UnixNano(), nil
 }
@@ -80,12 +80,20 @@ func ParseRFC3339Nano(value string) (int64, error) {
 // 0 < X < 1e6. Also, the maximum time in the past can be 1 January 1970 00:00:00 UTC (epoch time),
 // so giving "1000y" will result in epoch time.
 func parseTimeRange(timeRange string) (time.Time, error) {
-	match, err := regexp.MatchString(defaultDateTimeRangeShortRE, timeRange)
-	if !match { // fallback on to check if it's of longer notation
-		_, err = regexp.MatchString(defaultDateTimeRangeLongRE, timeRange)
-	}
+	isShortForm, err := regexp.MatchString(defaultDateTimeRangeShortRE, timeRange)
 	if err != nil {
 		return time.Time{}, err
+	}
+	if !isShortForm { // fallback to check if it's of longer notation
+		isLongForm, err := regexp.MatchString(defaultDateTimeRangeLongRE, timeRange)
+		if err != nil {
+			return time.Time{}, err
+		}
+		if !isLongForm {
+			return time.Time{}, fmt.Errorf(
+				"cannot parse timeRange %s, expected a number followed by one of "+
+					"s/second, m/minute, h/hour, d/day, w/week, M/month, y/year", timeRange)
+		}
 	}
 
 	re, _ := regexp.Compile(defaultDateTimeRangeNum)
