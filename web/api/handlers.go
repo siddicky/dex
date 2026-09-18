@@ -22,6 +22,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/superdurable/dex/gen/dexpb"
+	"github.com/superdurable/dex/service/common/typesafe"
+	"github.com/superdurable/dex/web/api/queryassist"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -34,18 +36,24 @@ const (
 )
 
 type handler struct {
-	client dexpb.FlowServiceClient
+	client         dexpb.FlowServiceClient
+	typeSafeClient *typesafe.Client // nil when TypeSafe query assist is disabled
 }
 
-func RegisterHandlers(mux *http.ServeMux, client dexpb.FlowServiceClient) {
+// RegisterHandlers wires Dex Web's HTTP API onto mux. typeSafeClient may be
+// nil, which disables POST /api/flows/search/interpret: that handler then
+// returns 501 without making any outbound call, so passing nil here is how a
+// caller keeps Dex Web from ever reaching TypeSafe.
+func RegisterHandlers(mux *http.ServeMux, client dexpb.FlowServiceClient, typeSafeClient *typesafe.Client) {
 	if mux == nil {
 		panic("HTTP mux must not be nil")
 	}
 	if client == nil {
 		panic("Dex FlowService client must not be nil")
 	}
-	handler := &handler{client: client}
+	handler := &handler{client: client, typeSafeClient: typeSafeClient}
 	mux.HandleFunc("POST /api/flows/search", handler.searchFlows)
+	mux.HandleFunc("POST /api/flows/search/interpret", handler.interpretSearch)
 	mux.HandleFunc("GET /api/flows/summary", handler.getFlowSummary)
 	mux.HandleFunc("GET /api/flows/history", handler.getHistoryEvents)
 	mux.HandleFunc("GET /api/flows/state", handler.getFlowState)
@@ -119,6 +127,66 @@ func engineWorkflowSearchQuery(query string) string {
 		return engineWorkflowVisibilityQuery
 	}
 	return fmt.Sprintf("(%s) AND (%s)", query, engineWorkflowVisibilityQuery)
+}
+
+func (h *handler) interpretSearch(response http.ResponseWriter, request *http.Request) {
+	if h.typeSafeClient == nil {
+		WriteError(response, http.StatusNotImplemented, "query assist is not enabled on this server", nil)
+		return
+	}
+	var body interpretSearchRequest
+	if err := decodeJSON(response, request, &body); err != nil {
+		WriteError(response, http.StatusBadRequest, err.Error(), nil)
+		return
+	}
+	if strings.TrimSpace(body.Request) == "" {
+		WriteError(response, http.StatusBadRequest, "request must not be empty", nil)
+		return
+	}
+	customFields, err := toQueryAssistFields(body.CustomFields)
+	if err != nil {
+		WriteError(response, http.StatusBadRequest, err.Error(), nil)
+		return
+	}
+
+	result, err := queryassist.Interpret(request.Context(), h.typeSafeClient, body.Request, customFields, time.Now())
+	if err != nil {
+		WriteError(response, http.StatusUnprocessableEntity, err.Error(), nil)
+		return
+	}
+	writeJSON(response, http.StatusOK, interpretSearchResponse{
+		Filters:     result.Filters,
+		Confidence:  result.Confidence,
+		NeedsReview: result.NeedsReview,
+	})
+}
+
+func toQueryAssistFields(specs []interpretSearchFieldSpec) ([]queryassist.Field, error) {
+	fields := make([]queryassist.Field, 0, len(specs))
+	seen := make(map[string]struct{}, len(specs))
+	for _, spec := range specs {
+		name := strings.TrimSpace(spec.Name)
+		if name == "" {
+			return nil, fmt.Errorf("customFields entry has an empty name")
+		}
+		if queryassist.IsBuiltInFieldName(name) {
+			return nil, fmt.Errorf("customFields[%q] collides with a built-in field", name)
+		}
+		if _, duplicate := seen[name]; duplicate {
+			return nil, fmt.Errorf("customFields[%q] is listed more than once", name)
+		}
+		seen[name] = struct{}{}
+		kind, err := queryassist.ParseFieldKind(spec.Kind)
+		if err != nil {
+			return nil, fmt.Errorf("customFields[%q]: %w", name, err)
+		}
+		fields = append(fields, queryassist.Field{
+			Name:    name,
+			Meaning: fmt.Sprintf("the %s Attribute", name),
+			Kind:    kind,
+		})
+	}
+	return fields, nil
 }
 
 func (h *handler) getFlowSummary(response http.ResponseWriter, request *http.Request) {

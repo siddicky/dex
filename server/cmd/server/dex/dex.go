@@ -143,6 +143,7 @@ func newApplication(cfg *config.Config, services serviceSelection) (*application
 				BindAddress:            cfg.Web.EffectiveBindAddress(),
 				Port:                   cfg.Web.EffectivePort(),
 				FlowRenderingDirectory: cfg.Web.FlowRenderingDirectory,
+				TypeSafe:               &cfg.TypeSafe,
 			},
 			dexpb.NewFlowServiceClient(connection),
 			assets.Files,

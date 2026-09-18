@@ -15,6 +15,11 @@ import type {
 import { isHandlerTimeoutPolicy, subFlowReusePolicyLabel, subFlowStatusName } from './semantic';
 import { generatedSubFlowID } from './subflows';
 
+// Numeric FlowStatus values, not the derived name string, so a future enum
+// rename doesn't silently drop a status here again.
+const failedSubFlowStatuses = new Set([3, 4, 5, 6]); // FAILED, TIMEOUT, TERMINATED, CANCELED
+const runningSubFlowStatus = 1; // RUNNING
+
 export const START_NODE_ID = '__start__';
 export const FLOW_TIMEOUT_HANDLER_STEP_TYPE = 'sys:timeout_handler';
 
@@ -362,7 +367,8 @@ function addSubFlowNodes(
         : {};
     const flowId = generatedSubFlowID(parentFlowID, stepNode.id, index);
     if (!flowId) return;
-    const status = subFlowStatusName(result.flowStatus ?? 1);
+    const rawStatus = Number(result.flowStatus ?? runningSubFlowStatus);
+    const status = subFlowStatusName(rawStatus);
     const options = condition.options && typeof condition.options === 'object'
       ? condition.options as Record<string, unknown> : {};
     const id = `__subflow:${stepNode.id}:${index}`;
@@ -370,9 +376,9 @@ function addSubFlowNodes(
       id,
       label: flowId,
       kind: 'subflow',
-      status: ['FAILED', 'CANCELED', 'TIMEOUT', 'TERMINATED'].includes(status)
+      status: failedSubFlowStatuses.has(rawStatus)
         ? 'Failed'
-        : status === 'RUNNING' ? 'Waiting' : 'Completed',
+        : rawStatus === runningSubFlowStatus ? 'Waiting' : 'Completed',
       parentStepId: stepNode.id,
       flowId,
       subFlowStatus: status,

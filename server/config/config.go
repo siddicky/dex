@@ -19,6 +19,7 @@ import (
 
 	"github.com/superdurable/dex/gen/dexpb"
 	"github.com/superdurable/dex/service/common/ptr"
+	"github.com/superdurable/dex/service/common/typesafe"
 	"github.com/uber-go/tally/v4/prometheus"
 	temporalWorker "go.temporal.io/sdk/worker"
 	cadenceWorker "go.uber.org/cadence/worker"
@@ -178,6 +179,8 @@ type (
 		AttributeStore AttributeStoreConfig `yaml:"attributeStore"`
 		// StreamStore configures best-effort resumable Streams. Default backend is disabled.
 		StreamStore StreamStoreConfig `yaml:"streamStore"`
+		// TypeSafe configures the optional TypeSafe System One integration used by Dex Web and dexcli. Default disabled.
+		TypeSafe typesafe.Config `yaml:"typeSafe"`
 	}
 
 	StreamStoreConfig struct {

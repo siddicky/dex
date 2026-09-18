@@ -441,6 +441,29 @@ describe('step graph', () => {
     });
   });
 
+  it('renders a timed-out SubFlow as Failed, not Completed', () => {
+    const graph = buildStepGraph([], [{
+      stepExecutionId: 'Parent-1',
+      fromStepExecutionId: '__start__',
+      stepType: 'Parent',
+      phase: 'Waiting',
+      stepExecutionLocals: [],
+      timers: [],
+      waitingCondition: { subFlowConditions: [{
+        conditionId: 'child',
+      }] },
+      completedConditions: { completedSubFlowResults: { 0: {
+        flowStatus: 4,
+      } } },
+    }], 'parent');
+
+    expect(graph.nodes.find((node) => node.kind === 'subflow')).toMatchObject({
+      status: 'Failed',
+      subFlowStatus: 'SERVER_SIDE_TIMEOUT_INTERNAL_ONLY',
+      flowId: 'SubFlow:parent-Parent-1-0',
+    });
+  });
+
   it('hides the timeout handler Step unless the timeout policy is Handler', () => {
     const timeoutHandler = {
       stepExecutionId: 'sys:timeout_handler-1',
