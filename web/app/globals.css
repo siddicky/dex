@@ -420,6 +420,27 @@ h3 {
   padding: 20px;
 }
 
+.ask-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.ask-input {
+  flex: 1;
+  min-height: 36px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  outline: none;
+  background: white;
+}
+
+.ask-input:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(111, 160, 54, 0.14);
+}
+
 .query-toolbar,
 .results-toolbar,
 .view-toolbar,

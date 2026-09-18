@@ -8,6 +8,8 @@
 
 package api
 
+import "github.com/superdurable/dex/web/api/queryassist"
+
 type errorResponse struct {
 	Error    string `json:"error"`
 	GRPCCode *int32 `json:"grpcCode,omitempty"`
@@ -22,6 +24,26 @@ type searchFlowsRequest struct {
 type searchFlowsResponse struct {
 	Flows         []flowExecution `json:"flows"`
 	NextPageToken string          `json:"nextPageToken"`
+}
+
+type interpretSearchRequest struct {
+	Request      string                     `json:"request"`
+	CustomFields []interpretSearchFieldSpec `json:"customFields"`
+}
+
+// interpretSearchFieldSpec is a caller-supplied candidate field query assist
+// may consider beyond its built-in fields, e.g. an indexed Attribute the
+// console has already observed in search results. Kind must be one
+// queryassist.ParseFieldKind accepts.
+type interpretSearchFieldSpec struct {
+	Name string `json:"name"`
+	Kind string `json:"kind"`
+}
+
+type interpretSearchResponse struct {
+	Filters     []queryassist.Filter `json:"filters"`
+	Confidence  float64              `json:"confidence"`
+	NeedsReview bool                 `json:"needsReview"`
 }
 
 type flowExecution struct {

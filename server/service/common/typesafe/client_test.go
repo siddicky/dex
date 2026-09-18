@@ -17,11 +17,9 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-
-	"github.com/superdurable/dex/config"
 )
 
-func newTestClient(t *testing.T, server *httptest.Server, cfg config.TypeSafeConfig) *Client {
+func newTestClient(t *testing.T, server *httptest.Server, cfg Config) *Client {
 	t.Helper()
 	if cfg.Endpoint == "" {
 		cfg.Endpoint = server.URL
@@ -39,7 +37,7 @@ func newTestClient(t *testing.T, server *httptest.Server, cfg config.TypeSafeCon
 
 func TestNewClientRequiresAPIKey(t *testing.T) {
 	envVar := "UNSET_TYPESAFE_API_KEY_" + t.Name()
-	_, err := NewClient(&config.TypeSafeConfig{Enabled: true, APIKeyEnvVar: envVar})
+	_, err := NewClient(&Config{Enabled: true, APIKeyEnvVar: envVar})
 	require.ErrorContains(t, err, envVar)
 }
 
@@ -51,7 +49,7 @@ func TestNewClientPanicsOnNilConfig(t *testing.T) {
 
 func TestNewClientPanicsWhenDisabled(t *testing.T) {
 	require.Panics(t, func() {
-		_, _ = NewClient(&config.TypeSafeConfig{Enabled: false})
+		_, _ = NewClient(&Config{Enabled: false})
 	})
 }
 
@@ -76,7 +74,7 @@ func TestAskSendsAuthorizationAndDecodesTypedAnswers(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := newTestClient(t, server, config.TypeSafeConfig{})
+	client := newTestClient(t, server, Config{})
 
 	response, err := client.Ask(context.Background(), "help, my payouts are failing", map[string]Question{
 		"is_urgent": NoulQuestion("Does this convey urgency?", nil),
@@ -140,7 +138,7 @@ func TestWeakestConfidenceErrorsOnMissingQuestion(t *testing.T) {
 func TestAskRejectsEmptyQuestions(t *testing.T) {
 	client := newTestClient(t, httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		t.Fatal("server should not be called for an empty question set")
-	})), config.TypeSafeConfig{})
+	})), Config{})
 
 	_, err := client.Ask(context.Background(), "state", nil)
 	require.ErrorContains(t, err, "at least one question")
@@ -153,7 +151,7 @@ func TestAskSurfacesNonOKStatus(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := newTestClient(t, server, config.TypeSafeConfig{})
+	client := newTestClient(t, server, Config{})
 
 	_, err := client.Ask(context.Background(), "state", map[string]Question{
 		"q": NoulQuestion("?", nil),
@@ -170,7 +168,7 @@ func TestAskRespectsContextCancellation(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := newTestClient(t, server, config.TypeSafeConfig{})
+	client := newTestClient(t, server, Config{})
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
 	defer cancel()

@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: LicenseRef-Sustainable-Use-1.0
 
 import type { FlowDefinitionGraph } from '@superdurable/flow-definition-renderer';
+import type { BasicFilter } from './query';
 
 export type {
   FlowDefinitionDiagnostic,
@@ -48,6 +49,12 @@ export interface FlowExecution {
 export interface SearchFlowsResult {
   flows: FlowExecution[];
   nextPageToken: string;
+}
+
+export interface InterpretSearchResult {
+  filters: BasicFilter[];
+  confidence: number;
+  needsReview: boolean;
 }
 
 export interface FlowSummary {

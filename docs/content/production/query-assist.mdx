@@ -1,0 +1,60 @@
+---
+title: Search query assist
+---
+
+# Search query assist
+
+Dex Web can turn a plain-English request, such as "failed flows from
+yesterday," into filters for its Flow search page. This feature is called
+query assist. It is optional, off by default, and backed by the
+[TypeSafe](https://docs.typesafe.ai) System One API.
+
+## What it does
+
+The console sends your request text, together with the field names it already
+knows about (**ExecutionStatus**, **WorkflowId**, **RunId**, **FlowType**, and
+any indexed Attribute the current search results have shown), to TypeSafe.
+TypeSafe never invents a field, operator, or value: it only ever selects among
+the ones Dex Web supplies. Dex Server then does all date arithmetic in code —
+TypeSafe never computes a date — and rejects any answer that names a field,
+operator, or value it did not offer.
+
+The result populates the Basic search editor's filter chips. It never runs a
+search on its own. When TypeSafe's confidence is low, or a request produces no
+filters, the console shows a message asking you to review the filters before
+searching. You can edit or remove any filter the same way as one you typed
+yourself.
+
+## What leaves the process
+
+When query assist is enabled, Dex Web sends your search request text and the
+names of your indexed Attributes to the TypeSafe API over HTTPS. It does not
+send Flow inputs, outputs, Attribute values, or any other Flow data. The
+TypeSafe API key is read from an environment variable on the server; it never
+reaches the browser.
+
+When query assist is disabled — the default — Dex Web makes no outbound call
+to TypeSafe. Its HTTP API route responds with an error case rather than
+attempting one.
+
+## Configuration
+
+Add a **typeSafe** section to your Dex Server configuration:
+
+```yaml
+typeSafe:
+  enabled: true
+  apiKeyEnvVar: TYPESAFE_API_KEY
+```
+
+**enabled** defaults to false. **apiKeyEnvVar** names the environment variable
+holding your TypeSafe API key; it defaults to **TYPESAFE_API_KEY**. Set that
+environment variable on the Dex Server process, not in the configuration file.
+**endpoint**, **model**, **timeout**, and **maxConcurrentRequests** have
+working defaults; override them only if your TypeSafe account needs a
+different endpoint or region, or if you need to bound outbound request
+concurrency more tightly.
+
+Treat the TypeSafe API key like any other production credential: keep it out
+of source control, and follow [Dex Web access control](/production/server-operations#dex-web-access-control)
+for who can reach the console that uses it.

@@ -1,0 +1,53 @@
+---
+title: 搜索查询助手
+---
+
+# 搜索查询助手
+
+Dex Web 可以把一句普通英文请求（例如 "failed flows from yesterday"）转换成
+Flow 搜索页面的过滤条件，这项功能称为查询助手。它是可选的，默认关闭，
+底层依赖 [TypeSafe](https://docs.typesafe.ai) 的 System One API。
+
+## 它做什么
+
+控制台会把你的请求文本，连同它已经知道的字段名（**ExecutionStatus**、
+**WorkflowId**、**RunId**、**FlowType**，以及当前搜索结果中出现过的任何
+已索引 Attribute）一起发送给 TypeSafe。TypeSafe 永远不会凭空创造字段、
+运算符或取值：它只能在 Dex Web 提供的选项中挑选。日期计算完全由 Dex
+Server 的代码完成——TypeSafe 从不自己计算日期——并且会拒绝任何指向未提供
+字段、运算符或取值的回答。
+
+结果会填入 Basic 搜索编辑器的过滤条件卡片，但不会自动发起搜索。当
+TypeSafe 的置信度较低,或某次请求没有产生任何过滤条件时，控制台会提示你
+先检查这些过滤条件再执行搜索。你可以像编辑自己手动输入的过滤条件一样
+编辑或删除它们。
+
+## 会离开进程的内容
+
+启用查询助手后，Dex Web 会通过 HTTPS 把你的搜索请求文本和已索引
+Attribute 的名称发送给 TypeSafe API。它不会发送 Flow 的输入、输出、
+Attribute 取值或任何其他 Flow 数据。TypeSafe API Key 从服务器上的环境变量
+读取，永远不会到达浏览器。
+
+当查询助手处于关闭状态（默认状态）时，Dex Web 不会向 TypeSafe 发起任何
+出站调用，其 HTTP API 路由会直接返回错误，而不会尝试调用。
+
+## 配置
+
+在 Dex Server 配置中添加 **typeSafe** 部分：
+
+```yaml
+typeSafe:
+  enabled: true
+  apiKeyEnvVar: TYPESAFE_API_KEY
+```
+
+**enabled** 默认值为 false。**apiKeyEnvVar** 指定存放 TypeSafe API Key 的
+环境变量名，默认值为 **TYPESAFE_API_KEY**。请在 Dex Server 进程上设置该
+环境变量，而不是写入配置文件。**endpoint**、**model**、**timeout** 和
+**maxConcurrentRequests** 都有可用的默认值；只有当你的 TypeSafe 账号需要
+不同的端点或地区，或者需要更严格地限制出站请求并发时，才需要覆盖它们。
+
+请把 TypeSafe API Key 当作生产环境凭据来对待：不要将其纳入版本控制，并
+参考[Dex Web 访问控制](/zh-Hans/production/server-operations#dex-web-访问控制)
+来管理谁可以访问使用该 Key 的控制台。

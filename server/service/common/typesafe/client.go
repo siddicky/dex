@@ -16,12 +16,7 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"time"
-
-	"github.com/superdurable/dex/config"
 )
-
-const defaultEndpoint = "https://api.typesafe.ai/v1/systemone"
 
 // maxErrorBodyBytes bounds how much of a non-2xx response body Ask reads into
 // its returned error, so a misbehaving endpoint cannot exhaust memory.
@@ -45,17 +40,17 @@ type Client struct {
 // if cfg.Enabled is true but the configured API key environment variable is
 // unset or empty, since sending a request with a blank bearer token would
 // fail confusingly at the TypeSafe API instead of at startup.
-func NewClient(cfg *config.TypeSafeConfig) (*Client, error) {
+func NewClient(cfg *Config) (*Client, error) {
 	if cfg == nil {
-		panic("typesafe: NewClient requires a non-nil *config.TypeSafeConfig")
+		panic("typesafe: NewClient requires a non-nil *Config")
 	}
 	if !cfg.Enabled {
-		panic("typesafe: NewClient must not be called when TypeSafeConfig.Enabled is false")
+		panic("typesafe: NewClient must not be called when Config.Enabled is false")
 	}
 
 	apiKeyEnvVar := cfg.APIKeyEnvVar
 	if apiKeyEnvVar == "" {
-		apiKeyEnvVar = config.DefaultTypeSafeAPIKeyEnvVar
+		apiKeyEnvVar = DefaultAPIKeyEnvVar
 	}
 	apiKey := os.Getenv(apiKeyEnvVar)
 	if apiKey == "" {
@@ -64,19 +59,19 @@ func NewClient(cfg *config.TypeSafeConfig) (*Client, error) {
 
 	endpoint := cfg.Endpoint
 	if endpoint == "" {
-		endpoint = defaultEndpoint
+		endpoint = DefaultEndpoint
 	}
 	model := cfg.Model
 	if model == "" {
-		model = "jev-latest"
+		model = DefaultModel
 	}
 	timeout := cfg.Timeout
 	if timeout <= 0 {
-		timeout = 10 * time.Second
+		timeout = DefaultTimeout
 	}
 	maxConcurrentRequests := cfg.MaxConcurrentRequests
 	if maxConcurrentRequests <= 0 {
-		maxConcurrentRequests = 8
+		maxConcurrentRequests = DefaultMaxConcurrentRequests
 	}
 
 	return &Client{

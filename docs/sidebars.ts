@@ -156,6 +156,7 @@ const sidebars: SidebarsConfig = {
         'production/server-operations',
         'production/metrics',
         'production/attribute-store',
+        'production/query-assist',
       ],
     },
     {

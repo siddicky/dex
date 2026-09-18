@@ -19,6 +19,7 @@ import (
 
 	"github.com/superdurable/dex/gen/dexpb"
 	"github.com/superdurable/dex/service/common/ptr"
+	"github.com/superdurable/dex/service/common/typesafe"
 	"github.com/uber-go/tally/v4/prometheus"
 	temporalWorker "go.temporal.io/sdk/worker"
 	cadenceWorker "go.uber.org/cadence/worker"
@@ -105,12 +106,6 @@ const (
 	DefaultStreamTrimBatchYieldTime = time.Millisecond
 	// DefaultStreamTrimWorkers bounds process-wide asynchronous trim concurrency.
 	DefaultStreamTrimWorkers = 4
-	// DefaultTypeSafeAPIKeyEnvVar is the environment variable TypeSafe reads its API key from when APIKeyEnvVar is empty.
-	DefaultTypeSafeAPIKeyEnvVar = "TYPESAFE_API_KEY"
-	// DefaultTypeSafeTimeout bounds one TypeSafe HTTP request when Timeout is zero.
-	DefaultTypeSafeTimeout = 10 * time.Second
-	// DefaultTypeSafeMaxConcurrentRequests bounds concurrent outbound TypeSafe requests when MaxConcurrentRequests is zero.
-	DefaultTypeSafeMaxConcurrentRequests = 8
 )
 
 const (
@@ -185,7 +180,7 @@ type (
 		// StreamStore configures best-effort resumable Streams. Default backend is disabled.
 		StreamStore StreamStoreConfig `yaml:"streamStore"`
 		// TypeSafe configures the optional TypeSafe System One integration used by Dex Web and dexcli. Default disabled.
-		TypeSafe TypeSafeConfig `yaml:"typeSafe"`
+		TypeSafe typesafe.Config `yaml:"typeSafe"`
 	}
 
 	StreamStoreConfig struct {
@@ -337,33 +332,6 @@ type (
 		FlowServiceTarget string `yaml:"flowServiceTarget"`
 		// FlowRenderingDirectory supplies Flow Definition Graph JSON files. Default empty disables static definitions. Immutable after startup.
 		FlowRenderingDirectory string `yaml:"flowRenderingDirectory"`
-	}
-
-	// TypeSafeConfig configures the optional TypeSafe System One integration
-	// (https://docs.typesafe.ai/api) used to turn natural-language input into
-	// typed judgments, such as interpreting a Flow search request. Immutable
-	// after startup. When Enabled is false, the process makes no TypeSafe
-	// calls and no other field is read.
-	TypeSafeConfig struct {
-		// Enabled turns the integration on. Default false: a stock Dex server makes no outbound
-		// TypeSafe calls and needs no API key.
-		Enabled bool `yaml:"enabled"`
-		// Endpoint is the TypeSafe System One HTTP endpoint. Default
-		// "https://api.typesafe.ai/v1/systemone".
-		Endpoint string `yaml:"endpoint"`
-		// Model is the TypeSafe model name sent with every request. Default "jev-latest".
-		Model string `yaml:"model"`
-		// APIKeyEnvVar names the environment variable holding the TypeSafe API key. Default
-		// "TYPESAFE_API_KEY" (DefaultTypeSafeAPIKeyEnvVar). The key itself is never read from this
-		// config file, so it cannot be checked in by mistake; the server reads it from the named
-		// environment variable at startup and never forwards it to a browser client.
-		APIKeyEnvVar string `yaml:"apiKeyEnvVar"`
-		// Timeout bounds one TypeSafe HTTP request. Non-positive defaults to ten seconds
-		// (DefaultTypeSafeTimeout).
-		Timeout time.Duration `yaml:"timeout"`
-		// MaxConcurrentRequests caps concurrent outbound TypeSafe requests across all callers
-		// sharing one Client. Non-positive defaults to 8 (DefaultTypeSafeMaxConcurrentRequests).
-		MaxConcurrentRequests int `yaml:"maxConcurrentRequests"`
 	}
 
 	WorkerConfig struct {

@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/superdurable/dex/gen/dexpb"
+	"github.com/superdurable/dex/service/common/typesafe"
 	"github.com/superdurable/dex/web/api"
 )
 
@@ -32,6 +33,10 @@ type Config struct {
 	Port int
 	// FlowRenderingDirectory defaults empty and supplies Flow Definition Graph JSON files to Dex Web.
 	FlowRenderingDirectory string
+	// TypeSafe defaults nil and, when non-nil with Enabled true, turns on natural-language Flow
+	// search assist backed by the TypeSafe System One API. Nil or Enabled false makes Dex Web
+	// register no query-assist route and open no outbound connection to TypeSafe.
+	TypeSafe *typesafe.Config
 }
 
 type Server struct {
@@ -78,7 +83,11 @@ func newServer(cfg *Config, client dexpb.FlowServiceClient, assets fs.FS, flowDe
 	}
 	mux := http.NewServeMux()
 	if client != nil {
-		api.RegisterHandlers(mux, client)
+		typeSafeClient, err := newTypeSafeClient(cfg.TypeSafe)
+		if err != nil {
+			return nil, err
+		}
+		api.RegisterHandlers(mux, client, typeSafeClient)
 	}
 	mux.Handle("GET /api/flow-definitions", flowDefinitions)
 	mux.Handle("/", spaHandler(assetRoot))
@@ -90,6 +99,16 @@ func newServer(cfg *Config, client dexpb.FlowServiceClient, assets fs.FS, flowDe
 			IdleTimeout:       90 * time.Second,
 		},
 	}, nil
+}
+
+// newTypeSafeClient returns nil when cfg is nil or disabled, so newServer
+// registers the query-assist route and opens an outbound TypeSafe connection
+// only when an operator explicitly turns it on.
+func newTypeSafeClient(cfg *typesafe.Config) (*typesafe.Client, error) {
+	if cfg == nil || !cfg.Enabled {
+		return nil, nil
+	}
+	return typesafe.NewClient(cfg)
 }
 
 func (s *Server) Run() error {

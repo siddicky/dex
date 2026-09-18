@@ -11,12 +11,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { displayValue, formatDate, formatDuration } from '@/lib/format';
 import {
   buildVisibilityQuery,
+  fieldQuotingFromSampleValue,
   parseVisibilityQuery,
   type BasicFilter,
+  type FieldQuoting,
   type QueryOperator,
 } from '@/lib/query';
 import { readResponseJSON } from '@/lib/http';
-import type { FlowExecution, SearchFlowsResult } from '@/lib/types';
+import type { FlowExecution, InterpretSearchResult, SearchFlowsResult } from '@/lib/types';
 import { StatusBadge } from '../components/StatusBadge';
 import { usePreferences } from '../providers';
 
@@ -103,8 +105,23 @@ export function FlowSearchPage() {
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [savedOpen, setSavedOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [askText, setAskText] = useState('');
+  const [asking, setAsking] = useState(false);
+  const [askError, setAskError] = useState('');
+  const [askReviewNotice, setAskReviewNotice] = useState('');
 
-  const generatedQuery = useMemo(() => buildVisibilityQuery(filters), [filters]);
+  const customFieldQuoting = useMemo(() => {
+    const quoting: Record<string, FieldQuoting> = {};
+    flows.forEach((flow) => flow.indexedAttributes.forEach((item) => {
+      if (hiddenIndexedAttributes.has(item.key) || item.key in quoting) return;
+      quoting[item.key] = fieldQuotingFromSampleValue(item.value);
+    }));
+    return quoting;
+  }, [flows]);
+  const generatedQuery = useMemo(
+    () => buildVisibilityQuery(filters, customFieldQuoting),
+    [filters, customFieldQuoting],
+  );
   const appliedQuery = mode === 'basic' ? generatedQuery : query;
   const customAttributes = useMemo(() => {
     const keys = new Set<string>();
@@ -186,6 +203,43 @@ export function FlowSearchPage() {
     void executeSearch(appliedQuery, '', 0, pageSize);
   }
 
+  async function runAsk() {
+    if (!askText.trim()) return;
+    setAsking(true);
+    setAskError('');
+    setAskReviewNotice('');
+    try {
+      const response = await fetch('/api/flows/search/interpret', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          request: askText,
+          customFields: customAttributes.map((name) => ({
+            name,
+            kind: customFieldQuoting[name] === 'unquoted' ? 'number' : 'keyword',
+          })),
+        }),
+      });
+      const result = await readResponseJSON<InterpretSearchResult>(response);
+      setFilters(result.filters);
+      setMode('basic');
+      if (result.filters.length === 0) {
+        setAskReviewNotice("Couldn't find anything to search for in that request. Try the Basic or Advanced editor instead.");
+        return;
+      }
+      if (result.needsReview) {
+        setAskReviewNotice('Review these filters before searching: TypeSafe was not fully confident in this interpretation.');
+        return;
+      }
+      setPageTokens(['']);
+      void executeSearch(buildVisibilityQuery(result.filters, customFieldQuoting), '', 0, pageSize);
+    } catch (interpretError) {
+      setAskError(interpretError instanceof Error ? interpretError.message : 'Query assist failed');
+    } finally {
+      setAsking(false);
+    }
+  }
+
   function switchMode(next: QueryMode) {
     if (next === mode) return;
     if (next === 'advanced') {
@@ -265,6 +319,25 @@ export function FlowSearchPage() {
   return (
     <div className="page-shell">
       <section className="card query-card">
+        <div className="ask-row">
+          <input
+            className="ask-input"
+            type="text"
+            placeholder='Ask, e.g. "failed flows from yesterday"'
+            value={askText}
+            onChange={(event) => setAskText(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') void runAsk();
+            }}
+            disabled={asking}
+          />
+          <button className="button" onClick={() => void runAsk()} disabled={asking || !askText.trim()}>
+            {asking ? 'Asking…' : 'Ask'}
+          </button>
+        </div>
+        {askError && <div className="error-banner">{askError}</div>}
+        {askReviewNotice && <div className="warning-banner">{askReviewNotice}</div>}
+
         <div className="query-toolbar">
           <div className="segmented" role="tablist" aria-label="Query mode">
             <button className={mode === 'basic' ? 'active' : ''} onClick={() => switchMode('basic')}>

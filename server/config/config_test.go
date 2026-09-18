@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/superdurable/dex/service/common/typesafe"
 )
 
 func TestRetryPolicyConfigUsesDurations(t *testing.T) {
@@ -110,7 +112,7 @@ typeSafe:
 `)
 	cfg, err := NewConfig(path)
 	require.NoError(t, err)
-	require.Equal(t, TypeSafeConfig{
+	require.Equal(t, typesafe.Config{
 		Enabled:               true,
 		Endpoint:              "https://example.test/v1/systemone",
 		Model:                 "jev-latest",
